@@ -170,8 +170,13 @@ h1 { font-size: clamp(36px, 6vw, 68px); line-height: 1.05; max-width: 14ch; }
 .debate { padding-top: 8vh; }
 .debate h1 { max-width: 12ch; }
 
-.results h1 { max-width: 16ch; }
-.summary { margin: 14px 0 22px; color: var(--gold); }
+.results {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 120px);
+}
+.results h1 { font-size: clamp(32px, 4vw, 46px); max-width: 18ch; }
+.summary { margin: 14px 0 18px; color: var(--gold); }
 .cards {
   display: grid;
   gap: 14px;
