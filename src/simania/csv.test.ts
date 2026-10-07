@@ -2,7 +2,7 @@ import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { csvStore, CSV_COLUMNS, parseCsv, toCsvRow } from './csv'
+import { BOOK_COLUMNS, REVIEW_COLUMNS, booksFileFor, csvStore, parseCsv, toReviewRow } from './csv'
 import { emptyBookMeta } from './parse'
 import type { StoredReview } from './store'
 
@@ -27,11 +27,11 @@ const sample: StoredReview = {
 }
 
 describe('csv catalog', () => {
-  it('quotes commas, quotes, and line breaks', () => {
-    const row = toCsvRow(sample)
+  it('quotes commas, quotes, and line breaks in the review row', () => {
+    const row = toReviewRow(sample)
     const parsed = parseCsv(`${row}\n`)
-    expect(parsed[0][8]).toBe('ספר, עם פסיק')
     expect(parsed[0][6]).toBe('שורה ראשונה\nשורה עם "ציטוט"')
+    expect(parsed[0][7]).toBe('20')
   })
 
   it('appends a review and continues from the saved cursor', async () => {
@@ -49,9 +49,11 @@ describe('csv catalog', () => {
     await again.upsert(sample)
     const rows = parseCsv((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
     expect(rows.filter((row) => row[0] === '10')).toHaveLength(1)
+    const page = await again.listBooks({ modern: false, limit: 5, offset: 0, now: new Date('2026-10-07T00:00:00Z') })
+    expect(page.books[0]?.title).toBe('ספר, עם פסיק')
   })
 
-  it('keeps book-page metadata on every review of that book', async () => {
+  it('stores the book once when several reviews point at it', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'simania-'))
     const file = join(dir, 'simania-reviews.csv')
     const store = csvStore(file)
@@ -65,9 +67,19 @@ describe('csv catalog', () => {
     await again.ensure()
     expect(await again.bookMeta(sample.bookId)).toMatchObject({ description: 'תקציר עם "ציטוט"', avgRating: 4.7, ratingCount: 3 })
     expect(await again.pendingBookIds()).toEqual([])
-    const rows = parseCsv((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
-    expect(rows[0].join(',')).toBe(CSV_COLUMNS.join(','))
-    expect(rows[1][19]).toBe('תקציר עם "ציטוט"')
-    expect(rows[2][19]).toBe('תקציר עם "ציטוט"')
+
+    const reviews = parseCsv((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+    expect(reviews[0].join(',')).toBe(REVIEW_COLUMNS.join(','))
+    expect(reviews).toHaveLength(3)
+    expect(reviews[1][6]).toBe(sample.body)
+    expect(reviews[2][6]).toBe('ביקורת שנייה')
+    expect(reviews.some((row) => row.join(',').includes('תקציר'))).toBe(false)
+
+    const books = parseCsv((await readFile(booksFileFor(file), 'utf8')).replace(/^\uFEFF/, ''))
+    expect(books[0].join(',')).toBe(BOOK_COLUMNS.join(','))
+    expect(books).toHaveLength(2)
+    expect(books[1][1]).toBe('ספר, עם פסיק')
+    expect(books[1][11]).toBe('תקציר עם "ציטוט"')
+    expect(books[1][22]).toBe('4.7')
   })
 })
