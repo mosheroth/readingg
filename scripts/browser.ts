@@ -21,7 +21,7 @@ export async function createBrowserFetch(): Promise<{
         return await readPage(page, url)
       } catch (error) {
         const message = error instanceof Error ? error.message : ''
-        if (!/timed out|Target closed|Session closed|Protocol error/i.test(message)) throw error
+        if (!/timed out|Target closed|Session closed|Protocol error|Execution context was destroyed/i.test(message)) throw error
         await page.close().catch(() => undefined)
         page = await openPage(browser)
         return await readPage(page, url)
@@ -55,7 +55,15 @@ async function readPage(page: Page, url: string): Promise<string> {
   const reviewPage = url.includes('showReview.php')
   const bookPage = url.includes('bookdetails.php')
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const html = await page.content()
+    let html = ''
+    try {
+      html = await page.content()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      if (!/timed out|Execution context was destroyed|Target closed/i.test(message)) throw error
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      continue
+    }
     if (isChallenge(html)) {
       await new Promise((resolve) => setTimeout(resolve, 1000))
       continue
