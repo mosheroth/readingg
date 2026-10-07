@@ -4,3 +4,5 @@ dev-dist
 *.local
 .env
 .DS_Store
+data/*.lock
+data/*.tmp
