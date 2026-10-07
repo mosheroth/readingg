@@ -39,6 +39,40 @@ describe('simania review page', () => {
   })
 })
 
+describe('split review text', () => {
+  it('follows a flight pointer to the review body', () => {
+    const body = 'שלום עולם, זו ביקורת שלמה.'
+    const length = Buffer.byteLength(body).toString(16)
+    const flight = JSON.stringify({
+      review: {
+        id: 5,
+        bookId: 9,
+        userId: 3,
+        content: '$71',
+        rating: 5,
+        date: '2026-01-02T00:00:00.000Z',
+        likesCount: 1,
+        reviewer: { id: 3, name: 'דנה' },
+      },
+      book: {
+        id: 9,
+        title: 'ספר קטן',
+        author: 'סופר',
+        publisher: 'הוצאה',
+        year: 2025,
+        pages: 40,
+        category: 'ספרות',
+        subCategory: 'מקורית',
+        imageUrl: 'https://cdn.simania.co.il/cover.jpg',
+      },
+    })
+    const html = `<title>ביקורת</title><script>self.__next_f.push([1,${JSON.stringify(flight)}])</script><script>self.__next_f.push([1,"71:T${length},"])</script><script>self.__next_f.push([1,${JSON.stringify(body)}])</script>`
+    const parsed = parseReviewPage(html, 5)
+    expect(parsed?.body).toBe(body)
+    expect(parsed?.title).toBe('ספר קטן')
+  })
+})
+
 describe('simania feed', () => {
   it('collects review ids once, newest first', () => {
     const html = readFileSync(join(fixtureDir, 'fixtures/feed-snippet.html'), 'utf8')

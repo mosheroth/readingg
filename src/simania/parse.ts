@@ -48,15 +48,15 @@ export function parseFeedIds(html: string): number[] {
 
 export function parseReviewPage(html: string, reviewId: number): ParsedReview | null {
   if (isChallenge(html)) return null
-  const flight = extractFlight(html)
+  const chunks = extractChunks(html)
+  const flight = chunks.join('\n')
+  const texts = textRows(chunks)
   const review = objectsContaining(flight, 'content').find(
-    (item) =>
-      item.id === reviewId &&
-      typeof item.bookId === 'number' &&
-      typeof item.content === 'string' &&
-      !isPointer(item.content),
+    (item) => item.id === reviewId && typeof item.bookId === 'number' && typeof item.content === 'string',
   )
   if (!review || typeof review.bookId !== 'number' || typeof review.content !== 'string') return null
+  const content = resolveText(review.content, texts)
+  if (!content) return null
 
   const book = objectsContaining(flight, 'publisher').find((item) => item.id === review.bookId)
   const nested = isRecord(review.book) ? review.book : null
@@ -79,7 +79,7 @@ export function parseReviewPage(html: string, reviewId: number): ParsedReview | 
     reviewer: text(reviewer?.name) ?? text(reviewer?.nickname),
     reviewerId: typeof review.userId === 'number' ? review.userId : intOf(reviewer?.id),
     rating: ratingOf(review.rating),
-    body: review.content.trim().slice(0, 50_000),
+    body: content.trim().slice(0, 50_000),
     writtenAt: dateOf(review.date),
     likes: positiveOrZero(review.likesCount),
   }
@@ -104,7 +104,7 @@ export function modernPublishedYear(now: Date): number {
   return now.getUTCFullYear() - 2
 }
 
-function extractFlight(html: string): string {
+function extractChunks(html: string): string[] {
   const marker = 'self.__next_f.push('
   const chunks: string[] = []
   let cursor = 0
@@ -120,7 +120,32 @@ function extractFlight(html: string): string {
     }
     cursor = end + 1
   }
-  return chunks.join('\n')
+  return chunks
+}
+
+function textRows(chunks: string[]): Map<string, string> {
+  const rows = new Map<string, string>()
+  for (let index = 0; index < chunks.length; index += 1) {
+    const match = chunks[index].match(/^([0-9a-f]+):T([0-9a-f]+),(.*)$/is)
+    if (!match) continue
+    const byteLength = Number.parseInt(match[2], 16)
+    const pieces = [match[3]]
+    let have = Buffer.byteLength(match[3])
+    while (have < byteLength && index + 1 < chunks.length) {
+      index += 1
+      pieces.push(chunks[index])
+      have += Buffer.byteLength(chunks[index])
+    }
+    const bytes = Buffer.concat(pieces.map((piece) => Buffer.from(piece)))
+    rows.set(match[1].toLowerCase(), bytes.subarray(0, byteLength).toString('utf8'))
+  }
+  return rows
+}
+
+function resolveText(value: string, rows: Map<string, string>): string | null {
+  if (!isPointer(value)) return value.trim() ? value : null
+  const resolved = rows.get(value.slice(1).toLowerCase())
+  return resolved && resolved.trim() ? resolved : null
 }
 
 function endOfCall(text: string, start: number): number {

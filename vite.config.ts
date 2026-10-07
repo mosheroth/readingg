@@ -1,4 +1,4 @@
-import type { Connect, Plugin } from 'vite'
+import type { Plugin, ViteDevServer } from 'vite'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -33,17 +33,16 @@ export default defineConfig({
 })
 
 function catalogDevApi(): Plugin {
-  const attach = (middlewares: Connect.Server) => {
-    middlewares.use(async (req, res, next) => {
+  const attach = (server: ViteDevServer) => {
+    server.middlewares.use(async (req, res, next) => {
       const url = req.url || ''
       if (!url.startsWith('/api/books')) {
         next()
         return
       }
       try {
-        const specifier = './src/simania/http.ts'
-        const { booksPayload } = (await import(specifier)) as typeof import('./src/simania/http.ts')
-        const result = await booksPayload(url)
+        const mod = (await server.ssrLoadModule('/src/simania/http.ts')) as typeof import('./src/simania/http.ts')
+        const result = await mod.booksPayload(url)
         res.statusCode = result.status
         res.setHeader('content-type', 'application/json; charset=utf-8')
         res.end(JSON.stringify(result.body))
@@ -57,10 +56,7 @@ function catalogDevApi(): Plugin {
   return {
     name: 'catalog-dev-api',
     configureServer(server) {
-      attach(server.middlewares)
-    },
-    configurePreviewServer(server) {
-      attach(server.middlewares)
+      attach(server)
     },
   }
 }

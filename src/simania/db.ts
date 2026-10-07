@@ -22,6 +22,7 @@ export function getSql(): Sql {
       ssl: local ? false : 'require',
       idle_timeout: 5,
       connect_timeout: 15,
+      onnotice: () => {},
     })
   }
   return client

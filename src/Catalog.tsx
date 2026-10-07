@@ -33,28 +33,31 @@ export default function Catalog() {
   const [total, setTotal] = useState(0)
   const [year, setYear] = useState<number | null>(null)
   const [seen, setSeen] = useState(0)
+  const [storedBooks, setStoredBooks] = useState(0)
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [offset, setOffset] = useState(0)
 
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true)
     setError(null)
-    const params = new URLSearchParams({ limit: '24', modern: modern ? '1' : '0' })
+    const params = new URLSearchParams({ limit: '24', offset: String(offset), modern: modern ? '1' : '0' })
     fetch(`/api/books?${params}`, { signal: controller.signal })
       .then(async (response) => {
         const body = (await response.json()) as CatalogResponse
         if (!response.ok || !body.ok) throw new Error(body.error || 'לא הצלחנו לטעון את המאגר')
-        setBooks(body.books)
+        setBooks((current) => (offset === 0 ? body.books : [...current, ...body.books]))
         setTotal(body.total)
         setYear(body.modernSinceYear ?? null)
-        setSeen(body.backfill?.seen ?? body.counts?.reviews ?? 0)
+        setSeen(body.counts?.reviews ?? 0)
+        setStoredBooks(body.counts?.books ?? 0)
         setDone(body.backfill?.done ?? false)
       })
       .catch((reason: unknown) => {
         if (reason instanceof DOMException && reason.name === 'AbortError') return
-        setBooks([])
+        if (offset === 0) setBooks([])
         setTotal(0)
         setError(reason instanceof Error ? reason.message : 'לא הצלחנו לטעון את המאגר')
       })
@@ -62,7 +65,7 @@ export default function Catalog() {
         if (!controller.signal.aborted) setLoading(false)
       })
     return () => controller.abort()
-  }, [modern])
+  }, [modern, offset])
 
   return (
     <section className="catalog">
@@ -74,17 +77,31 @@ export default function Catalog() {
         {year !== null && modern ? ` מוצגים ספרים שיצאו מ־${year} ואילך, וספרים בלי שנת הוצאה.` : ''}
       </p>
       <div className="row">
-        <button className={modern ? 'primary' : 'ghost'} type="button" onClick={() => setModern(true)}>
+        <button
+          className={modern ? 'primary' : 'ghost'}
+          type="button"
+          onClick={() => {
+            setOffset(0)
+            setModern(true)
+          }}
+        >
           יצאו לאחרונה
         </button>
-        <button className={!modern ? 'primary' : 'ghost'} type="button" onClick={() => setModern(false)}>
+        <button
+          className={!modern ? 'primary' : 'ghost'}
+          type="button"
+          onClick={() => {
+            setOffset(0)
+            setModern(false)
+          }}
+        >
           כל מה שדיברו עליו
         </button>
       </div>
       <p className="catalog-status">
         {loading && 'טוען את המאגר…'}
         {!loading && error && error}
-        {!loading && !error && `${total} ספרים במבט הזה · ${seen} ביקורות נשמרו${done ? ' · המילוי אחורה הושלם' : ''}`}
+        {!loading && !error && `${total} ספרים במבט הזה · ${storedBooks} ספרים ו־${seen} ביקורות במאגר${done ? ' · המילוי אחורה הושלם' : ''}`}
       </p>
       {!loading && !error && books.length === 0 && (
         <p className="note">עוד אין כאן ספרים. אחרי החיבור ל־Postgres הדגימה מתחילה למלא את המאגר.</p>
@@ -117,6 +134,11 @@ export default function Catalog() {
           </li>
         ))}
       </ul>
+      {books.length < total && (
+        <button className="ghost more" type="button" disabled={loading} onClick={() => setOffset(books.length)}>
+          {loading ? 'טוען…' : 'עוד ספרים'}
+        </button>
+      )}
     </section>
   )
 }
