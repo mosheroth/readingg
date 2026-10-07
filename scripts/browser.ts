@@ -17,15 +17,18 @@ export async function createBrowserFetch(): Promise<{
 
   return {
     async fetchText(url: string) {
-      try {
-        return await readPage(page, url)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : ''
-        if (!/timed out|Target closed|Session closed|Protocol error|Execution context was destroyed/i.test(message)) throw error
-        await page.close().catch(() => undefined)
-        page = await openPage(browser)
-        return await readPage(page, url)
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          return await deadline(readPage(page, url), 60_000)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : ''
+          const recoverable = /timed out|Target closed|Session closed|Protocol error|Execution context was destroyed|frame was detached/i.test(message)
+          if (!recoverable) throw error
+          await page.close().catch(() => undefined)
+          page = await openPage(browser)
+        }
       }
+      return '<title>חסר</title>'
     },
     async close() {
       await browser.close()
@@ -75,6 +78,22 @@ async function readPage(page: Page, url: string): Promise<string> {
     await new Promise((resolve) => setTimeout(resolve, 1000))
   }
   return page.content()
+}
+
+function deadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('page timed out')), ms)
+    work.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
 }
 
 type Page = {
