@@ -1,9 +1,9 @@
-import { appearanceCutoff, feedUrl, isChallenge, parseFeedIds, parseReviewPage, reviewPageUrl } from './parse'
+import { appearanceCutoff, bookPageUrl, emptyBookMeta, feedUrl, isChallenge, parseBookPage, parseFeedIds, parseReviewPage, reviewPageUrl, type BookMeta } from './parse'
 import type { CatalogStore } from './store'
 
 export interface JobReport {
   ok: boolean
-  mode: 'sample' | 'backfill'
+  mode: 'sample' | 'backfill' | 'books'
   blocked?: boolean
   skipped?: string
   fetched: number
@@ -120,7 +120,18 @@ export async function runBackfill(options: JobOptions): Promise<JobReport> {
           if (!parsed) {
             missing += 1
           } else {
-            await options.store.upsert(parsed)
+            const book = await bookForReview(options, parsed.bookId, gapMs, sleep)
+            if (book.blocked) {
+              await options.store.writeCursor('backfill', {
+                cursor: id,
+                done: false,
+                seenDelta: saved,
+                oldest,
+                note: 'stopped on a cloudflare challenge',
+              })
+              return { ok: false, mode: 'backfill', blocked: true, fetched, saved, missing, cursor: id, done: false }
+            }
+            await options.store.upsert(parsed, book.meta)
             saved += 1
             if (parsed.writtenAt && Date.parse(parsed.writtenAt) < cutoff) oldStreak += 1
             else oldStreak = 0
@@ -171,10 +182,61 @@ async function collect(
       missing += 1
       continue
     }
-    await options.store.upsert(parsed)
+    const book = await bookForReview(options, parsed.bookId, gapMs, sleep)
+    if (book.blocked) return { blocked: true, fetched, saved, missing }
+    await options.store.upsert(parsed, book.meta)
     saved += 1
   }
   return { fetched, saved, missing }
+}
+
+export async function runBookPages(options: JobOptions): Promise<JobReport> {
+  const limit = options.limit ?? 40
+  const budgetMs = options.budgetMs ?? 240_000
+  const gapMs = options.gapMs ?? 1100
+  const sleep = options.sleep ?? delay
+  const deadline = Date.now() + budgetMs
+  try {
+    await options.store.ensure()
+    const locked = await options.store.tryLock('books', Math.ceil(budgetMs / 1000) + 30)
+    if (!locked) return { ok: true, mode: 'books', skipped: 'locked', ...EMPTY }
+    try {
+      const ids = await options.store.pendingBookIds()
+      let fetched = 0
+      let saved = 0
+      let missing = 0
+      for (const id of ids) {
+        if (saved + missing >= limit || Date.now() >= deadline) break
+        if (fetched > 0) await sleep(gapMs)
+        const html = await options.fetchText(bookPageUrl(id))
+        fetched += 1
+        if (isChallenge(html)) return { ok: false, mode: 'books', blocked: true, fetched, saved, missing }
+        const meta = parseBookPage(html, id)
+        await options.store.saveBookMeta(id, meta ?? emptyBookMeta())
+        if (meta) saved += 1
+        else missing += 1
+      }
+      return { ok: true, mode: 'books', fetched, saved, missing, done: saved + missing >= ids.length }
+    } finally {
+      await options.store.unlock('books')
+    }
+  } catch (error) {
+    return { ok: false, mode: 'books', ...EMPTY, error: messageOf(error) }
+  }
+}
+
+async function bookForReview(
+  options: JobOptions,
+  bookId: number,
+  gapMs: number,
+  sleep: (ms: number) => Promise<void>,
+): Promise<{ blocked: true } | { blocked: false; meta: BookMeta }> {
+  const known = await options.store.bookMeta(bookId)
+  if (known) return { blocked: false, meta: known }
+  await sleep(gapMs)
+  const html = await options.fetchText(bookPageUrl(bookId))
+  if (isChallenge(html)) return { blocked: true }
+  return { blocked: false, meta: parseBookPage(html, bookId) ?? emptyBookMeta() }
 }
 
 function delay(ms: number): Promise<void> {

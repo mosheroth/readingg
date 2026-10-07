@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { bookPageUrl, excerpt, modernPublishedYear, reviewPageUrl } from './parse'
+import { bookPageUrl, excerpt, modernPublishedYear, reviewPageUrl, type BookMeta } from './parse'
 import type { CatalogBook, CatalogPage, CatalogStore, CrawlCursor, StoredReview } from './store'
 
 export const CSV_COLUMNS = [
@@ -23,13 +23,42 @@ export const CSV_COLUMNS = [
   'cover_url',
   'book_url',
   'review_url',
+  'description',
+  'subtitle',
+  'english_title',
+  'second_author',
+  'editor',
+  'isbn',
+  'danacode',
+  'series',
+  'series_number',
+  'language',
+  'format',
+  'avg_rating',
+  'rating_count',
+  'simania_review_count',
+  'view_count',
+  'owners_count',
+  'currently_reading',
+  'book_fetched',
 ] as const
+
+const LEGACY_COLUMNS = CSV_COLUMNS.slice(0, 19)
 
 export function csvStore(filePath: string): CatalogStore {
   const statePath = `${filePath}.state.json`
   const lockPath = `${filePath}.lock`
   const reviews = new Map<number, StoredReview>()
+  const books = new Map<number, BookMeta>()
   let ready = false
+
+  async function rewrite(): Promise<void> {
+    const lines = [`\uFEFF${CSV_COLUMNS.join(',')}`]
+    for (const review of reviews.values()) lines.push(toCsvRow(review, books.get(review.bookId) ?? null))
+    const temporary = `${filePath}.tmp`
+    await writeFile(temporary, `${lines.join('\n')}\n`, 'utf8')
+    await rename(temporary, filePath)
+  }
 
   return {
     async ensure() {
@@ -45,15 +74,19 @@ export function csvStore(filePath: string): CatalogStore {
         await writeFile(filePath, `\uFEFF${CSV_COLUMNS.join(',')}\n`, 'utf8')
       } else {
         const rows = parseCsv(raw.replace(/^\uFEFF/, ''))
-        const header = rows[0] ?? []
-        if (header.join(',') !== CSV_COLUMNS.join(',')) {
+        const header = (rows[0] ?? []).join(',')
+        const current = CSV_COLUMNS.join(',')
+        const legacy = LEGACY_COLUMNS.join(',')
+        if (header !== current && header !== legacy) {
           throw new Error(`unexpected columns in ${filePath}`)
         }
         for (const row of rows.slice(1)) {
           if (!row.some((cell) => cell.trim())) continue
           const review = reviewFromRow(row)
           reviews.set(review.reviewId, review)
+          if (row[36] === '1') books.set(review.bookId, metaFromRow(row))
         }
+        if (header === legacy) await rewrite()
       }
       ready = true
     },
@@ -64,13 +97,30 @@ export function csvStore(filePath: string): CatalogStore {
       const row = reviews.get(id)
       return row ? { writtenAt: row.writtenAt } : null
     },
-    async upsert(review) {
-      if (reviews.has(review.reviewId)) {
-        reviews.set(review.reviewId, review)
+    async bookMeta(bookId) {
+      return books.get(bookId) ?? null
+    },
+    async saveBookMeta(bookId, meta) {
+      books.set(bookId, meta)
+      await rewrite()
+    },
+    async pendingBookIds() {
+      const pending = new Set<number>()
+      for (const review of reviews.values()) {
+        if (!books.has(review.bookId)) pending.add(review.bookId)
+      }
+      return [...pending].sort((a, b) => b - a)
+    },
+    async upsert(review, book) {
+      if (book?.bookFetched) books.set(review.bookId, book)
+      const isNew = !reviews.has(review.reviewId)
+      reviews.set(review.reviewId, review)
+      const siblings = [...reviews.values()].some((item) => item.bookId === review.bookId && item.reviewId !== review.reviewId)
+      if (isNew && !siblings) {
+        await appendFile(filePath, `${toCsvRow(review, books.get(review.bookId) ?? null)}\n`, 'utf8')
         return
       }
-      reviews.set(review.reviewId, review)
-      await appendFile(filePath, `${toCsvRow(review)}\n`, 'utf8')
+      if (isNew || book?.bookFetched) await rewrite()
     },
     async tryLock(_key, seconds) {
       try {
@@ -104,7 +154,7 @@ export function csvStore(filePath: string): CatalogStore {
   }
 }
 
-export function toCsvRow(review: StoredReview): string {
+export function toCsvRow(review: StoredReview, meta?: BookMeta | null): string {
   const values = [
     review.reviewId,
     review.writtenAt,
@@ -125,6 +175,24 @@ export function toCsvRow(review: StoredReview): string {
     review.coverUrl,
     bookPageUrl(review.bookId),
     reviewPageUrl(review.reviewId),
+    meta?.description,
+    meta?.subtitle,
+    meta?.englishTitle,
+    meta?.secondAuthor,
+    meta?.editor,
+    meta?.isbn,
+    meta?.danacode,
+    meta?.series,
+    meta?.seriesNumber,
+    meta?.language,
+    meta?.format,
+    meta?.avgRating,
+    meta?.ratingCount,
+    meta?.simaniaReviewCount,
+    meta?.viewCount,
+    meta?.ownersCount,
+    meta?.currentlyReading,
+    meta?.bookFetched ? 1 : '',
   ]
   return values.map(csvField).join(',')
 }
@@ -168,6 +236,30 @@ export function parseCsv(text: string): string[][] {
     rows.push(row)
   }
   return rows
+}
+
+function metaFromRow(row: string[]): BookMeta {
+  const cell = (index: number) => row[index] ?? ''
+  return {
+    description: cell(19) || null,
+    subtitle: cell(20) || null,
+    englishTitle: cell(21) || null,
+    secondAuthor: cell(22) || null,
+    editor: cell(23) || null,
+    isbn: cell(24) || null,
+    danacode: cell(25) || null,
+    series: cell(26) || null,
+    seriesNumber: cell(27) || null,
+    language: cell(28) || null,
+    format: cell(29) || null,
+    avgRating: numberOrNull(cell(30)),
+    ratingCount: numberOrNull(cell(31)),
+    simaniaReviewCount: numberOrNull(cell(32)),
+    viewCount: numberOrNull(cell(33)),
+    ownersCount: numberOrNull(cell(34)),
+    currentlyReading: numberOrNull(cell(35)),
+    bookFetched: true,
+  }
 }
 
 function reviewFromRow(row: string[]): StoredReview {

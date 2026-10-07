@@ -43,6 +43,13 @@ function memoryStore() {
       const row = reviews.get(id)
       return row ? { writtenAt: row.writtenAt } : null
     },
+    async bookMeta() {
+      return null
+    },
+    async saveBookMeta() {},
+    async pendingBookIds() {
+      return []
+    },
     async upsert(review) {
       reviews.set(review.reviewId, review)
     },
@@ -134,5 +141,21 @@ describe('backfill', () => {
     expect(report.blocked).toBe(true)
     expect(cursors.get('backfill')?.cursor).toBe(10)
     expect(cursors.get('backfill')?.done).toBe(false)
+  })
+
+  it('keeps the review unstored when the book page is challenged', async () => {
+    const { store, reviews, cursors } = memoryStore()
+    const report = await runBackfill({
+      store,
+      gapMs: 0,
+      fetchText: async (url) => {
+        if (url.endsWith('reviews.php')) return '<a href="/showReview.php?reviewId=10"></a>'
+        if (url.includes('bookdetails.php')) return '<title>Just a moment...</title>'
+        return page(10, '2026-05-01T00:00:00.000Z')
+      },
+    })
+    expect(report.blocked).toBe(true)
+    expect(reviews.size).toBe(0)
+    expect(cursors.get('backfill')?.cursor).toBe(10)
   })
 })

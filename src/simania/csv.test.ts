@@ -2,7 +2,8 @@ import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { csvStore, parseCsv, toCsvRow } from './csv'
+import { csvStore, CSV_COLUMNS, parseCsv, toCsvRow } from './csv'
+import { emptyBookMeta } from './parse'
 import type { StoredReview } from './store'
 
 const sample: StoredReview = {
@@ -46,7 +47,27 @@ describe('csv catalog', () => {
     expect(await again.reviewStamp(10)).toEqual({ writtenAt: sample.writtenAt })
     expect((await again.readCursor('backfill')).cursor).toBe(9)
     await again.upsert(sample)
-    const text = await readFile(file, 'utf8')
-    expect(text.match(/10,/g)?.length).toBe(1)
+    const rows = parseCsv((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+    expect(rows.filter((row) => row[0] === '10')).toHaveLength(1)
+  })
+
+  it('keeps book-page metadata on every review of that book', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'simania-'))
+    const file = join(dir, 'simania-reviews.csv')
+    const store = csvStore(file)
+    await store.ensure()
+    await store.upsert(sample)
+    await store.upsert({ ...sample, reviewId: 11, body: 'ביקורת שנייה' })
+    const meta = { ...emptyBookMeta(), description: 'תקציר עם "ציטוט"', avgRating: 4.7, ratingCount: 3, viewCount: 12 }
+    await store.saveBookMeta(sample.bookId, meta)
+
+    const again = csvStore(file)
+    await again.ensure()
+    expect(await again.bookMeta(sample.bookId)).toMatchObject({ description: 'תקציר עם "ציטוט"', avgRating: 4.7, ratingCount: 3 })
+    expect(await again.pendingBookIds()).toEqual([])
+    const rows = parseCsv((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+    expect(rows[0].join(',')).toBe(CSV_COLUMNS.join(','))
+    expect(rows[1][19]).toBe('תקציר עם "ציטוט"')
+    expect(rows[2][19]).toBe('תקציר עם "ציטוט"')
   })
 })

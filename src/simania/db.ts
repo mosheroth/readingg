@@ -1,5 +1,5 @@
 import postgres from 'postgres'
-import { bookPageUrl, excerpt, modernPublishedYear, reviewPageUrl } from './parse'
+import { bookPageUrl, excerpt, modernPublishedYear, reviewPageUrl, type BookMeta } from './parse'
 import type { CatalogBook, CatalogPage, CatalogStore, CrawlCursor, StoredReview } from './store'
 
 type Sql = ReturnType<typeof postgres>
@@ -40,6 +40,9 @@ export function postgresStore(): CatalogStore {
     knownReviewIds,
     reviewStamp,
     upsert,
+    bookMeta,
+    saveBookMeta,
+    pendingBookIds,
     tryLock,
     unlock,
     readCursor,
@@ -89,6 +92,24 @@ async function createTables(): Promise<void> {
   )`)
   await sql.unsafe(`CREATE INDEX IF NOT EXISTS reviews_written_at_idx ON reviews (written_at DESC)`)
   await sql.unsafe(`CREATE INDEX IF NOT EXISTS reviews_book_idx ON reviews (book_id)`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS description TEXT`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS subtitle TEXT`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS english_title TEXT`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS second_author TEXT`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS editor TEXT`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS isbn TEXT`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS danacode TEXT`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS series TEXT`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS series_number TEXT`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS language TEXT`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS format TEXT`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS avg_rating NUMERIC`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS rating_count INTEGER`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS simania_review_count INTEGER`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS view_count INTEGER`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS owners_count INTEGER`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS currently_reading INTEGER`)
+  await sql.unsafe(`ALTER TABLE books ADD COLUMN IF NOT EXISTS book_fetched BOOLEAN NOT NULL DEFAULT false`)
   await sql.unsafe(`CREATE TABLE IF NOT EXISTS crawl_state (
     key TEXT PRIMARY KEY,
     cursor_id INTEGER,
@@ -110,6 +131,98 @@ async function knownReviewIds(ids: number[]): Promise<Set<number>> {
   return new Set(rows.map((row) => row.simania_review_id))
 }
 
+async function bookMeta(bookId: number): Promise<BookMeta | null> {
+  const sql = getSql()
+  const rows = await sql<BookMetaRow[]>`
+    SELECT description, subtitle, english_title, second_author, editor, isbn, danacode,
+           series, series_number, language, format, avg_rating, rating_count,
+           simania_review_count, view_count, owners_count, currently_reading, book_fetched
+    FROM books WHERE simania_book_id = ${bookId}
+  `
+  const row = rows[0]
+  if (!row?.book_fetched) return null
+  return metaFromDb(row)
+}
+
+async function saveBookMeta(bookId: number, meta: BookMeta): Promise<void> {
+  const sql = getSql()
+  await sql`
+    UPDATE books SET
+      description = ${meta.description},
+      subtitle = ${meta.subtitle},
+      english_title = ${meta.englishTitle},
+      second_author = ${meta.secondAuthor},
+      editor = ${meta.editor},
+      isbn = ${meta.isbn},
+      danacode = ${meta.danacode},
+      series = ${meta.series},
+      series_number = ${meta.seriesNumber},
+      language = ${meta.language},
+      format = ${meta.format},
+      avg_rating = ${meta.avgRating},
+      rating_count = ${meta.ratingCount},
+      simania_review_count = ${meta.simaniaReviewCount},
+      view_count = ${meta.viewCount},
+      owners_count = ${meta.ownersCount},
+      currently_reading = ${meta.currentlyReading},
+      book_fetched = true,
+      updated_at = now()
+    WHERE simania_book_id = ${bookId}
+  `
+}
+
+async function pendingBookIds(): Promise<number[]> {
+  const sql = getSql()
+  const rows = await sql<{ simania_book_id: number }[]>`
+    SELECT simania_book_id FROM books WHERE book_fetched = false ORDER BY simania_book_id DESC
+  `
+  return rows.map((row) => row.simania_book_id)
+}
+
+function metaFromDb(row: BookMetaRow): BookMeta {
+  return {
+    description: row.description,
+    subtitle: row.subtitle,
+    englishTitle: row.english_title,
+    secondAuthor: row.second_author,
+    editor: row.editor,
+    isbn: row.isbn,
+    danacode: row.danacode,
+    series: row.series,
+    seriesNumber: row.series_number,
+    language: row.language,
+    format: row.format,
+    avgRating: row.avg_rating === null ? null : Number(row.avg_rating),
+    ratingCount: row.rating_count,
+    simaniaReviewCount: row.simania_review_count,
+    viewCount: row.view_count,
+    ownersCount: row.owners_count,
+    currentlyReading: row.currently_reading,
+    bookFetched: true,
+  }
+}
+
+interface BookMetaRow {
+  description: string | null
+  subtitle: string | null
+  english_title: string | null
+  second_author: string | null
+  editor: string | null
+  isbn: string | null
+  danacode: string | null
+  series: string | null
+  series_number: string | null
+  language: string | null
+  format: string | null
+  avg_rating: string | number | null
+  rating_count: number | null
+  simania_review_count: number | null
+  view_count: number | null
+  owners_count: number | null
+  currently_reading: number | null
+  book_fetched: boolean
+}
+
 async function reviewStamp(id: number): Promise<{ writtenAt: string | null } | null> {
   const sql = getSql()
   const rows = await sql<{ written_at: Date | null }[]>`
@@ -119,17 +232,27 @@ async function reviewStamp(id: number): Promise<{ writtenAt: string | null } | n
   return { writtenAt: rows[0].written_at ? rows[0].written_at.toISOString() : null }
 }
 
-async function upsert(review: StoredReview): Promise<void> {
+async function upsert(review: StoredReview, book?: BookMeta | null): Promise<void> {
   const sql = getSql()
+  const meta = book?.bookFetched ? book : null
   await sql.begin(async (tx) => {
     await tx`
       INSERT INTO books (
         simania_book_id, title, author, translator, publisher, published_year, pages,
-        category, subcategory, cover_url, url
+        category, subcategory, cover_url, url,
+        description, subtitle, english_title, second_author, editor, isbn, danacode,
+        series, series_number, language, format, avg_rating, rating_count,
+        simania_review_count, view_count, owners_count, currently_reading, book_fetched
       ) VALUES (
         ${review.bookId}, ${review.title}, ${review.author}, ${review.translator}, ${review.publisher},
         ${review.publishedYear}, ${review.pages}, ${review.category}, ${review.subcategory},
-        ${review.coverUrl}, ${bookPageUrl(review.bookId)}
+        ${review.coverUrl}, ${bookPageUrl(review.bookId)},
+        ${meta?.description ?? null}, ${meta?.subtitle ?? null}, ${meta?.englishTitle ?? null},
+        ${meta?.secondAuthor ?? null}, ${meta?.editor ?? null}, ${meta?.isbn ?? null}, ${meta?.danacode ?? null},
+        ${meta?.series ?? null}, ${meta?.seriesNumber ?? null}, ${meta?.language ?? null}, ${meta?.format ?? null},
+        ${meta?.avgRating ?? null}, ${meta?.ratingCount ?? null}, ${meta?.simaniaReviewCount ?? null},
+        ${meta?.viewCount ?? null}, ${meta?.ownersCount ?? null}, ${meta?.currentlyReading ?? null},
+        ${Boolean(meta)}
       )
       ON CONFLICT (simania_book_id) DO UPDATE SET
         title = EXCLUDED.title,
@@ -141,6 +264,24 @@ async function upsert(review: StoredReview): Promise<void> {
         category = COALESCE(EXCLUDED.category, books.category),
         subcategory = COALESCE(EXCLUDED.subcategory, books.subcategory),
         cover_url = COALESCE(EXCLUDED.cover_url, books.cover_url),
+        description = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.description ELSE books.description END,
+        subtitle = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.subtitle ELSE books.subtitle END,
+        english_title = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.english_title ELSE books.english_title END,
+        second_author = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.second_author ELSE books.second_author END,
+        editor = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.editor ELSE books.editor END,
+        isbn = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.isbn ELSE books.isbn END,
+        danacode = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.danacode ELSE books.danacode END,
+        series = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.series ELSE books.series END,
+        series_number = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.series_number ELSE books.series_number END,
+        language = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.language ELSE books.language END,
+        format = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.format ELSE books.format END,
+        avg_rating = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.avg_rating ELSE books.avg_rating END,
+        rating_count = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.rating_count ELSE books.rating_count END,
+        simania_review_count = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.simania_review_count ELSE books.simania_review_count END,
+        view_count = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.view_count ELSE books.view_count END,
+        owners_count = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.owners_count ELSE books.owners_count END,
+        currently_reading = CASE WHEN EXCLUDED.book_fetched THEN EXCLUDED.currently_reading ELSE books.currently_reading END,
+        book_fetched = books.book_fetched OR EXCLUDED.book_fetched,
         updated_at = now()
     `
     await tx`

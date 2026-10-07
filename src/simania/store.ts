@@ -1,4 +1,4 @@
-import type { ParsedReview } from './parse'
+import type { BookMeta, ParsedReview } from './parse'
 
 export interface StoredReview extends ParsedReview {}
 
@@ -39,7 +39,10 @@ export interface CatalogStore {
   ensure(): Promise<void>
   knownReviewIds(ids: number[]): Promise<Set<number>>
   reviewStamp(id: number): Promise<{ writtenAt: string | null } | null>
-  upsert(review: StoredReview): Promise<void>
+  bookMeta(bookId: number): Promise<BookMeta | null>
+  saveBookMeta(bookId: number, meta: BookMeta): Promise<void>
+  pendingBookIds(): Promise<number[]>
+  upsert(review: StoredReview, book?: BookMeta | null): Promise<void>
   tryLock(key: string, seconds: number): Promise<boolean>
   unlock(key: string): Promise<void>
   readCursor(key: string): Promise<CrawlCursor>

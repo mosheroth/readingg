@@ -3,9 +3,58 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { cronAllowed } from './auth'
-import { excerpt, isChallenge, parseFeedIds, parseReviewPage } from './parse'
+import { excerpt, isChallenge, parseBookPage, parseFeedIds, parseReviewPage } from './parse'
 
 const fixtureDir = dirname(fileURLToPath(import.meta.url))
+
+describe('simania book page', () => {
+  it('reads the description, the aggregate rating, and the catalog counts', () => {
+    const book = {
+      id: 1028445,
+      title: 'מפגש עם עצמי בגיהנום',
+      subtitle: '',
+      nameInEnglish: 'Meeting Myself in Hell',
+      author2: '',
+      editor: 'עורך',
+      publisher: 'סלע מאיר',
+      isbn: '9789651234567',
+      danacode: '',
+      series: '',
+      seriesNumber: '',
+      language: '',
+      isAudioBook: 0,
+      description: '"הגוף נעשה קל."\nבמהלך השבי.',
+      viewCount: 55,
+      ownersCount: 2,
+      reviewCount: 2,
+      currentlyReading: 0,
+    }
+    const schema = {
+      '@type': 'Book',
+      productID: '1028445',
+      inLanguage: 'he',
+      bookFormat: 'https://schema.org/Paperback',
+      aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.7', ratingCount: 3, bestRating: '5', worstRating: '1' },
+    }
+    const flight = `${JSON.stringify(book)}\n${JSON.stringify(schema)}`
+    const html = `<title>ספר</title><script>self.__next_f.push([1,${JSON.stringify(flight)}])</script>`
+    expect(parseBookPage(html, 1028445)).toMatchObject({
+      description: '"הגוף נעשה קל."\nבמהלך השבי.',
+      englishTitle: 'Meeting Myself in Hell',
+      editor: 'עורך',
+      isbn: '9789651234567',
+      language: 'he',
+      format: 'Paperback',
+      avgRating: 4.7,
+      ratingCount: 3,
+      simaniaReviewCount: 2,
+      viewCount: 55,
+      ownersCount: 2,
+      currentlyReading: 0,
+      bookFetched: true,
+    })
+  })
+})
 
 describe('simania review page', () => {
   const html = readFileSync(join(fixtureDir, 'fixtures/review-136218.html'), 'utf8')

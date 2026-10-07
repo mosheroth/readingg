@@ -85,6 +85,81 @@ export function parseReviewPage(html: string, reviewId: number): ParsedReview | 
   }
 }
 
+export interface BookMeta {
+  description: string | null
+  subtitle: string | null
+  englishTitle: string | null
+  secondAuthor: string | null
+  editor: string | null
+  isbn: string | null
+  danacode: string | null
+  series: string | null
+  seriesNumber: string | null
+  language: string | null
+  format: string | null
+  avgRating: number | null
+  ratingCount: number | null
+  simaniaReviewCount: number | null
+  viewCount: number | null
+  ownersCount: number | null
+  currentlyReading: number | null
+  bookFetched: boolean
+}
+
+export function emptyBookMeta(): BookMeta {
+  return {
+    description: null,
+    subtitle: null,
+    englishTitle: null,
+    secondAuthor: null,
+    editor: null,
+    isbn: null,
+    danacode: null,
+    series: null,
+    seriesNumber: null,
+    language: null,
+    format: null,
+    avgRating: null,
+    ratingCount: null,
+    simaniaReviewCount: null,
+    viewCount: null,
+    ownersCount: null,
+    currentlyReading: null,
+    bookFetched: true,
+  }
+}
+
+export function parseBookPage(html: string, bookId: number): BookMeta | null {
+  if (isChallenge(html)) return null
+  const chunks = extractChunks(html)
+  const flight = chunks.join('\n')
+  const book = objectWithNumericId(flight, bookId)
+  if (!book) return null
+  const schema = schemaForBook(flight, bookId)
+  const rating = isRecord(schema?.aggregateRating) ? schema.aggregateRating : null
+  const description = typeof book.description === 'string' ? resolveText(book.description, textRows(chunks)) : null
+  return {
+    description: description ? description.trim().slice(0, 20_000) : null,
+    subtitle: text(book.subtitle),
+    englishTitle: text(book.nameInEnglish),
+    secondAuthor: text(book.author2),
+    editor: text(book.editor),
+    isbn: textish(book.isbn),
+    danacode: textish(book.danacode),
+    series: text(book.series),
+    seriesNumber: textish(book.seriesNumber),
+    language: text(book.language) ?? text(schema?.inLanguage),
+    format: formatOf(book, schema),
+    avgRating: decimal(rating?.ratingValue),
+    ratingCount: positiveOrZero(rating?.ratingCount),
+    simaniaReviewCount: positiveOrZero(book.reviewCount),
+    viewCount: positiveOrZero(book.viewCount),
+    ownersCount: positiveOrZero(book.ownersCount),
+    currentlyReading: positiveOrZero(book.currentlyReading),
+    bookFetched: true,
+  }
+}
+
 export function excerpt(body: string, max = 280): string {
   const flat = body.replace(/\s+/g, ' ').trim()
   if (flat.length <= max) return flat
@@ -173,6 +248,43 @@ function endOfCall(text: string, start: number): number {
   return -1
 }
 
+function objectWithNumericId(flight: string, id: number): Record<string, unknown> | null {
+  for (const needle of [`"id":${id}`, `"id": ${id}`]) {
+    let cursor = 0
+    while ((cursor = flight.indexOf(needle, cursor)) !== -1) {
+      const after = flight[cursor + needle.length] ?? ''
+      if (/\d/.test(after)) {
+        cursor += needle.length
+        continue
+      }
+      const start = flight.lastIndexOf('{', cursor)
+      const value = start >= 0 ? parseObjectAt(flight, start) : null
+      if (isRecord(value) && value.id === id) return value
+      cursor += needle.length
+    }
+  }
+  return null
+}
+
+function schemaForBook(flight: string, bookId: number): Record<string, unknown> | null {
+  for (const needle of [`"productID":"${bookId}"`, `"productID": "${bookId}"`]) {
+    const at = flight.indexOf(needle)
+    if (at === -1) continue
+    const start = flight.lastIndexOf('{', at)
+    const value = start >= 0 ? parseObjectAt(flight, start) : null
+    if (isRecord(value)) return value
+  }
+  return null
+}
+
+function formatOf(book: Record<string, unknown>, schema: Record<string, unknown> | null): string | null {
+  if (book.isAudioBook === 1 || book.isAudioBook === true) return 'audio'
+  const raw = text(schema?.bookFormat) ?? ''
+  const name = raw.split('/').pop() ?? ''
+  if (name === 'Paperback' || name === 'Hardcover' || name === 'EBook' || name === 'AudiobookFormat') return name
+  return null
+}
+
 function objectsContaining(flight: string, key: string): Record<string, unknown>[] {
   const needle = `"${key}":`
   const found: Record<string, unknown>[] = []
@@ -237,6 +349,17 @@ function text(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return trimmed ? trimmed : null
+}
+
+function textish(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return text(value)
+}
+
+function decimal(value: unknown): number | null {
+  const number = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(number) || number < 0 || number > 10) return null
+  return Math.round(number * 100) / 100
 }
 
 function yearOf(value: unknown): number | null {

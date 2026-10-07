@@ -29,18 +29,20 @@ export async function createBrowserFetch(): Promise<{
         const message = error instanceof Error ? error.message : ''
         if (!/ERR_ABORTED|Navigation timeout/i.test(message)) throw error
       }
-      const reviewPage = url.includes('showReview.php')
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        const html = await page.content()
-        if (isChallenge(html)) {
+        const reviewPage = url.includes('showReview.php')
+        const bookPage = url.includes('bookdetails.php')
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          const html = await page.content()
+          if (isChallenge(html)) {
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+            continue
+          }
+          if (bookPage && (html.includes('"viewCount"') || html.includes('aggregateRating') || html.includes('"description"'))) return html
+          if (!reviewPage && !bookPage && html.includes('showReview.php?reviewId=')) return html
+          if (reviewPage && (html.includes('bookdetails.php?item_id=') || html.includes('\\"bookId\\"'))) return html
+          if (reviewPage && attempt >= 8 && html.includes('__next_f')) return html
           await new Promise((resolve) => setTimeout(resolve, 1000))
-          continue
         }
-        if (!reviewPage && html.includes('showReview.php?reviewId=')) return html
-        if (reviewPage && (html.includes('bookdetails.php?item_id=') || html.includes('\\"bookId\\"'))) return html
-        if (reviewPage && attempt >= 8 && html.includes('__next_f')) return html
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-      }
       return page.content()
     },
     async close() {
