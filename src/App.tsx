@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import Catalog from './Catalog'
 import { bookById } from './data/books'
 import { genreLabel, lengthLabel, originLabel, summaryLine } from './data/labels'
 import { questions } from './data/questions'
@@ -17,6 +18,7 @@ function convinced(personaId: string): string {
 
 export default function App() {
   const [session, setSession] = useState<Session>(() => loadSession() ?? { name: 'intro' })
+  const [pane, setPane] = useState<'table' | 'catalog'>('table')
   const [shelf, setShelf] = useState<ShelfItem[]>([])
   const [debating, setDebating] = useState(false)
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null)
@@ -55,18 +57,29 @@ export default function App() {
     <div className="app">
       <div className="lamp" aria-hidden="true" />
       <header className="top">
-        <button className="mark" type="button" onClick={() => setSession({ name: 'intro' })}>
+        <button
+          className="mark"
+          type="button"
+          onClick={() => {
+            setPane('table')
+            setSession({ name: 'intro' })
+          }}
+        >
           <span className="live" aria-hidden="true" />
           השולחן
         </button>
-        {session.name === 'quiz' && (
+        <button className="ghost nav" type="button" onClick={() => setPane('catalog')}>
+          המאגר
+        </button>
+        {pane === 'table' && session.name === 'quiz' && (
           <p className="progress">
             שאלה {session.step + 1} מתוך {questions.length}
           </p>
         )}
       </header>
       <main>
-        {session.name === 'intro' && (
+        {pane === 'catalog' && <Catalog />}
+        {pane === 'table' && session.name === 'intro' && (
           <Intro
             shelf={shelf}
             canInstall={installEvent !== null}
@@ -77,7 +90,7 @@ export default function App() {
             onStart={() => setSession({ name: 'quiz', step: 0, answers: {} })}
           />
         )}
-        {session.name === 'quiz' && (
+        {pane === 'table' && session.name === 'quiz' && (
           <Quiz
             step={session.step}
             onBack={() => {
@@ -92,8 +105,8 @@ export default function App() {
             }}
           />
         )}
-        {session.name === 'results' && debating && <Debate />}
-        {session.name === 'results' && !debating && (
+        {pane === 'table' && session.name === 'results' && debating && <Debate />}
+        {pane === 'table' && session.name === 'results' && !debating && (
           <Results
             answers={session.answers}
             recommendations={recommendations}
@@ -113,7 +126,7 @@ export default function App() {
             onRestart={() => setSession({ name: 'quiz', step: 0, answers: {} })}
           />
         )}
-        {session.name === 'chosen' && (
+        {pane === 'table' && session.name === 'chosen' && (
           <Chosen
             rec={recommendations.find((item) => item.book.id === session.bookId) ?? null}
             fallbackId={session.bookId}

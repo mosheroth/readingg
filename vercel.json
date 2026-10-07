@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "functions": {
+    "api/cron/sample.ts": { "maxDuration": 60 },
+    "api/cron/backfill.ts": { "maxDuration": 300 }
+  },
+  "crons": [
+    { "path": "/api/cron/sample", "schedule": "0 5 * * *" },
+    { "path": "/api/cron/backfill", "schedule": "0 6 * * *" }
+  ]
+}

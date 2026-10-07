@@ -1,0 +1,75 @@
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { describe, expect, it } from 'vitest'
+import { cronAllowed } from './auth'
+import { excerpt, isChallenge, parseFeedIds, parseReviewPage } from './parse'
+
+const fixtureDir = dirname(fileURLToPath(import.meta.url))
+
+describe('simania review page', () => {
+  const html = readFileSync(join(fixtureDir, 'fixtures/review-136218.html'), 'utf8')
+
+  it('reads the book and the review from the flight payload', () => {
+    const parsed = parseReviewPage(html, 136218)
+    expect(parsed).toMatchObject({
+      reviewId: 136218,
+      bookId: 1026644,
+      title: 'חלאות יקרות לליבנו',
+      author: 'ריטה קוגן',
+      publisher: 'קתרזיס',
+      publishedYear: 2026,
+      pages: 187,
+      category: 'ספרות',
+      subcategory: 'ספרות מקורית',
+      reviewer: 'rea',
+      reviewerId: 165045,
+      rating: 3,
+      writtenAt: '2026-04-17T08:42:12.000Z',
+      likes: 7,
+    })
+    expect(parsed?.body.startsWith('במרכז הספר שלוש נובלות')).toBe(true)
+    expect(parsed?.coverUrl).toContain('1026644')
+  })
+
+  it('ignores a cloudflare challenge', () => {
+    const challenge = '<title>Just a moment...</title><p>cdn-cgi/challenge-platform</p>'
+    expect(isChallenge(challenge)).toBe(true)
+    expect(parseReviewPage(challenge, 1)).toBeNull()
+  })
+})
+
+describe('simania feed', () => {
+  it('collects review ids once, newest first', () => {
+    const html = readFileSync(join(fixtureDir, 'fixtures/feed-snippet.html'), 'utf8')
+    expect(parseFeedIds(html)).toEqual([137934, 137900])
+  })
+})
+
+describe('excerpt', () => {
+  it('keeps a short review and trims a long one on a space', () => {
+    expect(excerpt('משפט קצר')).toBe('משפט קצר')
+    const long = `${'מילה '.repeat(80)}סוף`
+    const trimmed = excerpt(long, 40)
+    expect(trimmed.endsWith('…')).toBe(true)
+    expect(trimmed.length).toBeLessThanOrEqual(41)
+  })
+})
+
+describe('cron auth', () => {
+  it('requires the bearer secret in production and allows local runs without one', () => {
+    const previous = { secret: process.env.CRON_SECRET, env: process.env.VERCEL_ENV }
+    process.env.CRON_SECRET = 's3cret'
+    process.env.VERCEL_ENV = 'production'
+    expect(cronAllowed('Bearer s3cret')).toBe(true)
+    expect(cronAllowed('Bearer other')).toBe(false)
+    delete process.env.CRON_SECRET
+    expect(cronAllowed(null)).toBe(false)
+    delete process.env.VERCEL_ENV
+    expect(cronAllowed(null)).toBe(true)
+    if (previous.secret === undefined) delete process.env.CRON_SECRET
+    else process.env.CRON_SECRET = previous.secret
+    if (previous.env === undefined) delete process.env.VERCEL_ENV
+    else process.env.VERCEL_ENV = previous.env
+  })
+})
