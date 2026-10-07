@@ -80,13 +80,15 @@ export function csvStore(filePath: string): CatalogStore {
         if (header !== current && header !== legacy) {
           throw new Error(`unexpected columns in ${filePath}`)
         }
+        let migrated = false
         for (const row of rows.slice(1)) {
           if (!row.some((cell) => cell.trim())) continue
           const review = reviewFromRow(row)
           reviews.set(review.reviewId, review)
+          if (row[24] === '0' || row[25] === '0' || row[27] === '0') migrated = true
           if (row[36] === '1') books.set(review.bookId, metaFromRow(row))
         }
-        if (header === legacy) await rewrite()
+        if (header === legacy || migrated) await rewrite()
       }
       ready = true
     },
@@ -246,10 +248,10 @@ function metaFromRow(row: string[]): BookMeta {
     englishTitle: cell(21) || null,
     secondAuthor: cell(22) || null,
     editor: cell(23) || null,
-    isbn: cell(24) || null,
-    danacode: cell(25) || null,
+    isbn: blankCode(cell(24)),
+    danacode: blankCode(cell(25)),
     series: cell(26) || null,
-    seriesNumber: cell(27) || null,
+    seriesNumber: blankCode(cell(27)),
     language: cell(28) || null,
     format: cell(29) || null,
     avgRating: numberOrNull(cell(30)),
@@ -283,6 +285,11 @@ function reviewFromRow(row: string[]): StoredReview {
     subcategory: cell(15) || null,
     coverUrl: cell(16) || null,
   }
+}
+
+function blankCode(value: string): string | null {
+  if (!value || value === '0') return null
+  return value
 }
 
 function numberOrNull(value: string): number | null {

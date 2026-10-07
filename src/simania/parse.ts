@@ -144,10 +144,10 @@ export function parseBookPage(html: string, bookId: number): BookMeta | null {
     englishTitle: text(book.nameInEnglish),
     secondAuthor: text(book.author2),
     editor: text(book.editor),
-    isbn: textish(book.isbn),
-    danacode: textish(book.danacode),
+    isbn: codeOf(book.isbn),
+    danacode: codeOf(book.danacode),
     series: text(book.series),
-    seriesNumber: textish(book.seriesNumber),
+    seriesNumber: codeOf(book.seriesNumber),
     language: text(book.language) ?? text(schema?.inLanguage),
     format: formatOf(book, schema),
     avgRating: decimal(rating?.ratingValue),
@@ -354,6 +354,12 @@ function text(value: unknown): string | null {
 function textish(value: unknown): string | null {
   if (typeof value === 'number' && Number.isFinite(value)) return String(value)
   return text(value)
+}
+
+function codeOf(value: unknown): string | null {
+  const raw = textish(value)
+  if (!raw || raw === '0') return null
+  return raw
 }
 
 function decimal(value: unknown): number | null {
