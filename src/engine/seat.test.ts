@@ -46,6 +46,24 @@ describe('seatThree', () => {
     const lines = seats.flatMap((seat) => seat.reasons)
     expect(new Set(lines).size).toBe(lines.length)
     expect(lines.filter((line) => line.includes('ביקשתם שזה ייגע')).length).toBeLessThanOrEqual(1)
+    expect(lines.filter((line) => line.includes('עמוד')).length).toBeLessThanOrEqual(1)
+  })
+
+  it('does not explain every book by how long it is', () => {
+    const seats = seatThree({
+      seedId: null,
+      direction: 'similar',
+      seek: 'grip',
+      heaviness: 'light',
+      moment: 'returning',
+      life: 'love',
+      sofa: 'devour',
+      origin: 'original',
+    })
+    const lines = seats.flatMap((seat) => seat.reasons)
+    expect(new Set(lines).size).toBe(lines.length)
+    expect(lines.filter((line) => line.includes('עמוד')).length).toBeLessThanOrEqual(1)
+    expect(lines.some((line) => line.includes('ביקור'))).toBe(true)
   })
 
   it('offers another three that were not already seated', () => {

@@ -108,33 +108,6 @@ function viaLine(book: DisputedBook, via: string[]): string | null {
   return null
 }
 
-function pageLine(book: DisputedBook, books: DisputedBook[], answers: SeatAnswers): string | null {
-  const pages = books.map((item) => item.pages).filter((item): item is number => item != null)
-  const mine = book.pages
-  if (mine == null || new Set(pages).size < 2 || !alone(books, mine, (item) => item.pages)) return null
-  const shortest = Math.min(...pages)
-  const longest = Math.max(...pages)
-  const wantsLight = answers.seek === 'lift' || answers.heaviness === 'light' || answers.moment === 'afterHeavy'
-  const wantsWeight = answers.heaviness === 'deep' || answers.heaviness === 'lasting' || answers.moment === 'challenge'
-  const ask = askPhrase(answers)
-  if (mine === shortest && answers.moment === 'returning') return `חוזרים אחרי הפסקה, וזה הקצר מבין השלושה: ${mine} עמודים`
-  if (mine === shortest && wantsLight && ask !== 'ביקשתם משהו קל יותר') {
-    return `ביקשתם משהו קל יותר, וזה הקצר מבין השלושה: ${mine} עמודים`
-  }
-  if (mine === longest && wantsWeight && !wantsLight && ask !== 'ביקשתם משקל') {
-    return `ביקשתם משקל, וזה הארוך מבין השלושה: ${mine} עמודים`
-  }
-  if (mine === shortest) return `זה הקצר מבין השלושה: ${mine} עמודים`
-  if (mine === longest) return `זה הארוך מבין השלושה: ${mine} עמודים`
-  return `באורך ${mine} עמודים, בין השניים האחרים`
-}
-
-function shelfLine(book: DisputedBook, books: DisputedBook[]): string | null {
-  const shelf = shelfOf(book).replace(/\s+/g, ' ').trim()
-  if (!shelf || !alone(books, shelfOf(book), shelfOf)) return null
-  return `זה היחיד כאן ממדף ${shelf}`
-}
-
 function matchesAsk(book: DisputedBook, answers: SeatAnswers): boolean {
   const shelf = shelfOf(book)
   const pages = book.pages ?? 320
@@ -153,98 +126,182 @@ function matchesAsk(book: DisputedBook, answers: SeatAnswers): boolean {
   return false
 }
 
-function gapLine(book: DisputedBook, books: DisputedBook[]): string | null {
-  const gapLabel = `${book.praise.rating} מול ${book.dissent.rating}`
-  if (!alone(books, gapLabel, (item) => `${item.praise.rating} מול ${item.dissent.rating}`)) return null
-  const gap = book.praise.rating - book.dissent.rating
-  const gaps = books.map((item) => item.praise.rating - item.dissent.rating)
-  return gap === Math.max(...gaps) ? `הוויכוח כאן החד מבין השלושה: ${gapLabel}` : `הביקורות כאן ${gapLabel}`
+function cleanShelf(book: DisputedBook): string {
+  return shelfOf(book).replace(/\s+/g, ' ').trim()
 }
 
-function ratingLine(book: DisputedBook, books: DisputedBook[]): string | null {
-  if (book.avgRating == null || !alone(books, book.avgRating, (item) => item.avgRating)) return null
+interface ReasonCandidate {
+  index: number
+  kind: string
+  text: string
+}
+
+function lengthCandidate(books: DisputedBook[], answers: SeatAnswers): ReasonCandidate | null {
+  const known = books.flatMap((book, index) => (book.pages == null ? [] : [{ index, pages: book.pages }]))
+  if (known.length < 2 || new Set(known.map((item) => item.pages)).size < 2) return null
+  const shortest = Math.min(...known.map((item) => item.pages))
+  const longest = Math.max(...known.map((item) => item.pages))
+  const wantsLight = answers.seek === 'lift' || answers.heaviness === 'light' || answers.moment === 'afterHeavy'
+  const wantsWeight = answers.heaviness === 'deep' || answers.heaviness === 'lasting' || answers.moment === 'challenge'
+  if (answers.moment === 'returning' || wantsLight) {
+    if (shortest > 320) return null
+    const index = known.find((item) => item.pages === shortest)?.index
+    if (index == null) return null
+    const text =
+      answers.moment === 'returning'
+        ? `חוזרים אחרי הפסקה, וזה ספר של ${shortest} עמודים`
+        : `ביקשתם משהו קל יותר, וזה ספר של ${shortest} עמודים`
+    return { index, kind: 'length', text }
+  }
+  if (wantsWeight && longest >= 320) {
+    const index = known.find((item) => item.pages === longest)?.index
+    if (index == null) return null
+    return { index, kind: 'length', text: `ביקשתם משקל, וזה ספר של ${longest} עמודים` }
+  }
+  return null
+}
+
+function yearCandidate(books: DisputedBook[]): ReasonCandidate | null {
+  const known = books.flatMap((book, index) => (book.year == null ? [] : [{ index, year: book.year }]))
+  if (known.length < 3) return null
+  let best: ReasonCandidate | null = null
+  let bestGap = 0
+  for (const item of known) {
+    const gaps = known.filter((other) => other.index !== item.index).map((other) => item.year - other.year)
+    const older = gaps.every((gap) => gap <= -10)
+    const newer = gaps.every((gap) => gap >= 10)
+    if (!older && !newer) continue
+    const delta = Math.min(...gaps.map((gap) => Math.abs(gap)))
+    if (delta <= bestGap) continue
+    bestGap = delta
+    best = {
+      index: item.index,
+      kind: 'year',
+      text: older ? `יצא ב־${item.year}, ${delta} שנה לפני השניים האחרים` : `יצא ב־${item.year}, ${delta} שנה אחרי השניים האחרים`,
+    }
+  }
+  return best
+}
+
+function crowdCandidate(books: DisputedBook[]): ReasonCandidate | null {
+  const counts = books.map((book) => book.simaniaReviewCount)
+  if (counts.some((count) => count == null)) return null
+  const known = counts as number[]
+  const max = Math.max(...known)
+  if (known.filter((count) => count === max).length !== 1) return null
+  const next = Math.max(...known.filter((count) => count !== max))
+  if (max < next * 3 && max - next < 40) return null
+  const index = known.indexOf(max)
+  const book = books[index]
+  const rating = book.avgRating
   const ratings = books.map((item) => item.avgRating).filter((item): item is number => item != null)
-  const shown = formatRating(book.avgRating)
-  return book.avgRating === Math.max(...ratings) ? `הציון הגבוה מבין השלושה בסימניה: ${shown}` : `בסימניה הציון שלו ${shown}`
-}
-
-function yearLine(book: DisputedBook, books: DisputedBook[]): string | null {
-  if (!book.year || !alone(books, book.year, (item) => item.year)) return null
-  return `היחיד שיצא ב־${book.year}`
-}
-
-function translatorLine(book: DisputedBook, books: DisputedBook[]): string | null {
-  if (!book.translator || !alone(books, book.translator, (item) => item.translator)) return null
-  return `בתרגום ${book.translator}`
-}
-
-function closeLine(book: DisputedBook, books: DisputedBook[], answers: SeatAnswers): string | null {
-  const seed = seedById(answers.seedId)
-  if (!seed || answers.direction !== 'similar') return null
-  const scores = books.map((item) => contextScore(item, answers))
-  const best = Math.max(...scores)
-  if (scores.filter((score) => score === best).length !== 1) return null
-  if (contextScore(book, answers) !== best) return null
-  return `הכי קרוב ל«${seed.title}» מבין השלושה`
-}
-
-function contrastLines(book: DisputedBook, books: DisputedBook[], answers: SeatAnswers): string[] {
-  return [
-    closeLine(book, books, answers),
-    pageLine(book, books, answers),
-    shelfLine(book, books),
-    gapLine(book, books),
-    ratingLine(book, books),
-    translatorLine(book, books),
-    yearLine(book, books),
-  ].filter((line): line is string => line != null)
-}
-
-function readerArgument(text: string): boolean {
-  return text.startsWith('ביקשתם') || text.startsWith('חוזרים')
+  const leads = rating != null && ratings.filter((item) => item === rating).length === 1 && rating === Math.max(...ratings)
+  const count = max.toLocaleString('he-IL')
+  const text = leads
+    ? `${count} ביקורות בסימניה, והציון הגבוה כאן: ${formatRating(rating)}`
+    : `${count} ביקורות בסימניה, הרבה יותר מהשניים האחרים`
+  return { index, kind: 'crowd', text }
 }
 
 function reasonsForTrio(picks: { book: DisputedBook; via: string[] }[], answers: SeatAnswers): string[][] {
   const books = picks.map((pick) => pick.book)
   const ask = askPhrase(answers)
-  const packs = picks.map((pick) => ({
-    via: viaLine(pick.book, pick.via),
-    contrasts: contrastLines(pick.book, books, answers),
-  }))
-  const askIndex = packs.findIndex((pack, index) => matchesAsk(books[index], answers) && !readerArgument(pack.contrasts[0] ?? ''))
-  const drafts = packs.map((pack, index) => {
-    const contrasts = [...pack.contrasts]
-    const lines: string[] = []
-    if (index === askIndex) {
-      const shelf = contrasts.find((line) => line.startsWith('זה היחיד כאן ממדף'))
-      const detail = shelf ?? contrasts.find((line) => !readerArgument(line))
-      if (detail) {
-        const at = contrasts.indexOf(detail)
-        contrasts.splice(at, 1)
-        lines.push(`${ask}. ${detail}`)
-      } else lines.push(ask)
-    }
-    if (pack.via) lines.push(pack.via)
-    for (const line of contrasts) {
-      if (lines.length >= 3) break
-      if (!lines.includes(line)) lines.push(line)
-    }
-    if (lines.length === 0) {
-      const book = books[index]
-      lines.push(`של ${book.author}, ${book.praise.rating} מול ${book.dissent.rating}`)
-    }
-    return lines.slice(0, 3)
+  const candidates: ReasonCandidate[] = []
+
+  picks.forEach((pick, index) => {
+    const via = viaLine(pick.book, pick.via)
+    if (via) candidates.push({ index, kind: `via-${index}`, text: via })
   })
-  const seen = new Set<string>()
-  return drafts.map((list, index) => {
-    const unique = list.filter((line) => {
-      if (seen.has(line)) return false
-      seen.add(line)
-      return true
+
+  const length = lengthCandidate(books, answers)
+  if (length) candidates.push(length)
+  const lengthCoversAsk = length != null && length.text.startsWith(ask)
+
+  const askIndex = books.findIndex((book, index) => matchesAsk(book, answers) && !(lengthCoversAsk && index === length?.index))
+  if (askIndex >= 0) {
+    const book = books[askIndex]
+    const shelf = cleanShelf(book)
+    const uniqueShelf = Boolean(shelf) && alone(books, shelfOf(book), shelfOf)
+    candidates.push({
+      index: askIndex,
+      kind: 'ask',
+      text: uniqueShelf ? `${ask}, וזה היחיד כאן ממדף ${shelf}` : `${ask}, וזה הספר של ${book.author}`,
     })
-    if (unique.length > 0) return unique
+  }
+
+  const crowd = crowdCandidate(books)
+  if (crowd) candidates.push(crowd)
+
+  const ratings = books.map((book) => book.avgRating)
+  const numeric = ratings.filter((item): item is number => item != null)
+  if (numeric.length > 0 && !(crowd && crowd.text.includes('הציון הגבוה'))) {
+    const best = Math.max(...numeric)
+    if (ratings.filter((item) => item === best).length === 1) {
+      const index = ratings.indexOf(best)
+      candidates.push({ index, kind: 'score', text: `הציון הגבוה מבין השלושה בסימניה: ${formatRating(best)}` })
+    }
+  }
+
+  const gaps = books.map((book) => book.praise.rating - book.dissent.rating)
+  const sharpest = Math.max(...gaps)
+  if (gaps.filter((gap) => gap === sharpest).length === 1) {
+    const index = gaps.indexOf(sharpest)
     const book = books[index]
-    return [`של ${book.author}, ${book.praise.rating} מול ${book.dissent.rating}`]
+    candidates.push({
+      index,
+      kind: 'debate',
+      text: `הוויכוח כאן החד מבין השלושה: ${book.praise.rating} מול ${book.dissent.rating}`,
+    })
+  }
+
+  books.forEach((book, index) => {
+    const shelf = cleanShelf(book)
+    if (!shelf || !alone(books, shelfOf(book), shelfOf)) return
+    if (candidates.some((item) => item.index === index && item.kind === 'ask' && item.text.includes(shelf))) return
+    candidates.push({ index, kind: `shelf-${index}`, text: `זה היחיד כאן ממדף ${shelf}` })
+  })
+
+  const seed = seedById(answers.seedId)
+  if (seed && answers.direction === 'similar') {
+    const scores = books.map((book) => contextScore(book, answers))
+    const best = Math.max(...scores)
+    if (scores.filter((score) => score === best).length === 1) {
+      candidates.push({
+        index: scores.indexOf(best),
+        kind: 'close',
+        text: `הכי קרוב ל«${seed.title}» מבין השלושה`,
+      })
+    }
+  }
+
+  const translatorIndex = books.findIndex(
+    (book, index) => book.translator && books.filter((item) => item.translator === book.translator).length === 1 && index >= 0,
+  )
+  if (translatorIndex >= 0) {
+    candidates.push({ index: translatorIndex, kind: 'translator', text: `בתרגום ${books[translatorIndex].translator}` })
+  }
+
+  const year = yearCandidate(books)
+  if (year) candidates.push(year)
+
+  const rank = (kind: string) =>
+    kind.startsWith('via') ? 0 : ['ask', 'crowd', 'debate', 'score', 'close', 'length', 'translator', 'year'].indexOf(kind) + 1 || 8
+  const pending = [...candidates].sort((a, b) => rank(a.kind) - rank(b.kind) || a.index - b.index)
+  const used = new Set<string>()
+  const lines = books.map(() => [] as string[])
+  for (let pass = 0; pass < 2; pass += 1) {
+    for (let index = 0; index < books.length; index += 1) {
+      if (lines[index].length > pass) continue
+      const next = pending.find((item) => item.index === index && item.text && !used.has(item.kind) && !lines[index].includes(item.text))
+      if (!next) continue
+      used.add(next.kind)
+      lines[index].push(next.text)
+    }
+  }
+  return lines.map((list, index) => {
+    if (list.length > 0) return list
+    const book = books[index]
+    return [`של ${book.author}, ביקורת של ${book.praise.rating} מול ${book.dissent.rating}`]
   })
 }
 
