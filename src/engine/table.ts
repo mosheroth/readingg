@@ -34,9 +34,25 @@ export interface DisputedBook {
   origin: TableOrigin
   coverUrl: string
   bookUrl: string
+  avgRating: number | null
+  simaniaReviewCount: number | null
   description: string
   praise: Voice
   dissent: Voice
+  advocates: Advocate[]
+}
+
+export interface AlsoBook {
+  id: string
+  title: string
+  author: string
+  url: string
+}
+
+export interface Advocate {
+  reviewer: string
+  also: AlsoBook[]
+  more: number
 }
 
 export function descriptionLead(description: string): { lead: string; rest: string } {

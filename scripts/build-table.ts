@@ -17,6 +17,7 @@ type Origin = 'original' | 'translated' | 'unknown'
 
 interface ReviewSide {
   reviewId: string
+  reviewerId: string
   reviewer: string
   rating: number
   likes: number
@@ -24,6 +25,15 @@ interface ReviewSide {
   url: string
   bodyLength: number
 }
+
+interface FanHit {
+  bookId: string
+  rating: number
+  writtenAt: string
+  reviewer: string
+}
+
+const ALSO_LIMIT = 3
 
 function column(header: string[], name: string): number {
   const index = header.indexOf(name)
@@ -66,6 +76,7 @@ function side(row: string[], index: Record<string, number>): ReviewSide | null {
   const reviewId = row[index.review_id] ?? ''
   return {
     reviewId,
+    reviewerId: (row[index.reviewer_id] ?? '').trim(),
     reviewer: (row[index.reviewer] ?? '').trim() || 'קורא בסימניה',
     rating,
     likes: num(row[index.likes]) ?? 0,
@@ -89,6 +100,7 @@ const bookIndex = Object.fromEntries(BOOK_COLUMNS.map((name) => [name, column(bo
 const praise = new Map<string, ReviewSide>()
 const dissent = new Map<string, ReviewSide>()
 const mentions = new Map<string, { count: number; reviewId: number; url: string }>()
+const fanHits = new Map<string, FanHit[]>()
 
 for (const row of reviewRows.slice(1)) {
   const bookId = row[reviewIndex.book_id] ?? ''
@@ -106,6 +118,18 @@ for (const row of reviewRows.slice(1)) {
       mention.url = reviewUrl
     }
   }
+  const reviewerId = (row[reviewIndex.reviewer_id] ?? '').trim()
+  const rating = num(row[reviewIndex.rating]) ?? 0
+  if (rating >= 4 && reviewerId) {
+    const hits = fanHits.get(reviewerId) ?? []
+    hits.push({
+      bookId,
+      rating,
+      writtenAt: (row[reviewIndex.written_at] ?? '').trim(),
+      reviewer: (row[reviewIndex.reviewer] ?? '').trim() || 'קורא בסימניה',
+    })
+    fanHits.set(reviewerId, hits)
+  }
   const voice = side(row, reviewIndex)
   if (!voice) continue
   if (voice.rating >= 4) {
@@ -120,6 +144,7 @@ for (const row of reviewRows.slice(1)) {
 const catalog = []
 const disputed = []
 const listed = []
+const bookMeta = new Map<string, { title: string; author: string; url: string }>()
 
 for (const row of bookRows.slice(1)) {
   const id = row[bookIndex.book_id] ?? ''
@@ -132,6 +157,8 @@ for (const row of bookRows.slice(1)) {
   const year = num(row[bookIndex.published_year] ?? '')
   const category = (row[bookIndex.category] ?? '').trim()
   catalog.push({ id, title, author, year, category, subcategory, origin })
+  const bookUrl = (row[bookIndex.book_url] ?? '').trim() || `https://simania.co.il/bookdetails.php?item_id=${id}`
+  bookMeta.set(id, { title, author, url: bookUrl })
   const mention = mentions.get(id)
   const rating = num(row[bookIndex.avg_rating] ?? '')
   listed.push({
@@ -155,7 +182,8 @@ for (const row of bookRows.slice(1)) {
   if (!good || !bad) continue
   const pages = num(row[bookIndex.pages] ?? '')
   const coverUrl = (row[bookIndex.cover_url] ?? '').trim()
-  const bookUrl = (row[bookIndex.book_url] ?? '').trim() || `https://simania.co.il/bookdetails.php?item_id=${id}`
+  const avgRating = rating && rating > 0 ? rating : null
+  const reviewCount = num(row[bookIndex.simania_review_count] ?? '')
   disputed.push({
     id,
     title,
@@ -168,10 +196,18 @@ for (const row of bookRows.slice(1)) {
     origin,
     coverUrl,
     bookUrl,
+    avgRating,
+    simaniaReviewCount: reviewCount && reviewCount > 0 ? reviewCount : null,
     description: cleanDescription(row[bookIndex.description] ?? ''),
     praise: publicSide(good),
     dissent: publicSide(bad),
+    advocates: [] as ReturnType<typeof advocatesFor>,
   })
+}
+
+for (const book of disputed) {
+  const featured = praise.get(book.id)
+  book.advocates = advocatesFor(book.id, featured?.reviewerId ?? '')
 }
 
 catalog.sort((a, b) => a.id.localeCompare(b.id))
@@ -186,6 +222,45 @@ function cleanDescription(raw: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim()
     .slice(0, 4000)
+}
+
+function otherBooks(reviewerId: string, currentId: string): { also: { id: string; title: string; author: string; url: string }[]; more: number } {
+  const best = new Map<string, FanHit>()
+  for (const hit of fanHits.get(reviewerId) ?? []) {
+    if (hit.bookId === currentId || !bookMeta.get(hit.bookId)?.title) continue
+    const prev = best.get(hit.bookId)
+    if (!prev || hit.rating > prev.rating || (hit.rating === prev.rating && hit.writtenAt > prev.writtenAt)) best.set(hit.bookId, hit)
+  }
+  const ranked = [...best.values()].sort(
+    (a, b) => b.rating - a.rating || b.writtenAt.localeCompare(a.writtenAt) || a.bookId.localeCompare(b.bookId),
+  )
+  return {
+    also: ranked.slice(0, ALSO_LIMIT).map((hit) => {
+      const meta = bookMeta.get(hit.bookId)!
+      return { id: hit.bookId, title: meta.title, author: meta.author, url: meta.url }
+    }),
+    more: Math.max(0, ranked.length - ALSO_LIMIT),
+  }
+}
+
+function advocatesFor(bookId: string, featuredId: string) {
+  const people = new Map<string, { reviewer: string; rating: number }>()
+  for (const [reviewerId, hits] of fanHits) {
+    const here = hits.filter((hit) => hit.bookId === bookId)
+    if (here.length === 0) continue
+    const best = here.reduce((left, right) => (left.rating >= right.rating ? left : right))
+    people.set(reviewerId, { reviewer: best.reviewer, rating: best.rating })
+  }
+  return [...people.entries()]
+    .map(([reviewerId, person]) => ({ reviewer: person.reviewer, rating: person.rating, reviewerId, ...otherBooks(reviewerId, bookId) }))
+    .filter((person) => person.also.length > 0)
+    .sort(
+      (a, b) =>
+        Number(b.reviewerId === featuredId) - Number(a.reviewerId === featuredId) ||
+        b.rating - a.rating ||
+        a.reviewer.localeCompare(b.reviewer, 'he'),
+    )
+    .map(({ reviewer, also, more }) => ({ reviewer, also, more }))
 }
 
 function publicSide(voice: ReviewSide) {
@@ -225,9 +300,16 @@ const bookType = `Array<{
   origin: 'original' | 'translated' | 'unknown'
   coverUrl: string
   bookUrl: string
+  avgRating: number | null
+  simaniaReviewCount: number | null
   description: string
   praise: { reviewId: string; reviewer: string; rating: number; excerpt: string; url: string }
   dissent: { reviewId: string; reviewer: string; rating: number; excerpt: string; url: string }
+  advocates: Array<{
+    reviewer: string
+    also: Array<{ id: string; title: string; author: string; url: string }>
+    more: number
+  }>
 }>`
 
 const listedType = `Array<{
@@ -272,6 +354,7 @@ console.log(
       listed: listed.length,
       reviews: reviewRows.length - 1,
       disputed: disputed.length,
+      withOtherBooks: disputed.filter((book) => book.advocates.length > 0).length,
       byOrigin,
       subcategories: [...bySub.entries()].sort((a, b) => b[1] - a[1]),
     },

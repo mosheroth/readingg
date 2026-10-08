@@ -15,7 +15,18 @@ describe('argued books', () => {
       expect(book.praise.url).toContain('simania.co.il')
       expect(book.dissent.url).toContain('simania.co.il')
       expect(book.praise.reviewId).not.toBe(book.dissent.reviewId)
+      if (book.avgRating != null) expect(book.avgRating).toBeGreaterThan(0)
+      if (book.simaniaReviewCount != null) expect(book.simaniaReviewCount).toBeGreaterThan(0)
+      for (const person of book.advocates) {
+        expect(person.reviewer.length).toBeGreaterThan(0)
+        expect(person.also.length).toBeGreaterThan(0)
+        expect(person.also.length).toBeLessThanOrEqual(3)
+        expect(person.also.every((item) => item.id !== book.id && item.title.length > 0 && item.url.includes('simania.co.il'))).toBe(true)
+      }
     }
+    expect(arguedBooks.some((book) => book.coverUrl.startsWith('https://'))).toBe(true)
+    expect(arguedBooks.some((book) => book.avgRating != null && book.simaniaReviewCount != null)).toBe(true)
+    expect(arguedBooks.some((book) => book.advocates.some((person) => person.also.length > 0))).toBe(true)
   })
 })
 

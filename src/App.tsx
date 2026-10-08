@@ -3,7 +3,7 @@ import Catalog from './Catalog'
 import { questions } from './data/questions'
 import { seatSummary, seatThree, type Seat, type SeatAnswers } from './engine/seat'
 import { arguedBooks, type OriginChoice } from './engine/table'
-import { BookFacts, BookStep, DirectionStep } from './Show'
+import { AlsoBooks, BookFacts, BookScore, BookStep, Cover, DirectionStep } from './Show'
 import { loadSession, loadShelf, saveSeat, saveSession, type SeatDraft, type Session, type ShelfItem } from './storage'
 import type { Heaviness, Life, Moment, Seek, Sofa } from './types'
 
@@ -335,8 +335,14 @@ function Results({
             <h2>{seat.persona.name}</h2>
             <p className="stance">{seat.persona.stance}</p>
             <p className="bring">{seat.persona.id === 'yael' ? 'מביאה את' : 'מביא את'}</p>
-            <h3>{seat.book.title}</h3>
-            <BookFacts book={seat.book} />
+            <div className="card-book">
+              <Cover src={seat.book.coverUrl} />
+              <div>
+                <h3>{seat.book.title}</h3>
+                <BookScore book={seat.book} />
+                <BookFacts book={seat.book} />
+              </div>
+            </div>
             {seat.reasons.length > 0 && (
               <ul className="chips">
                 {seat.reasons.map((reason) => (
@@ -345,6 +351,7 @@ function Results({
               </ul>
             )}
             <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
+            <AlsoBooks book={seat.book} />
             <p className="jab">{reviewLine('נגד', seat.book.dissent.reviewer, seat.book.dissent.rating, seat.dissentLead)}</p>
             <button className="primary" type="button" onClick={() => onChoose(seat)}>
               זה הספר
@@ -382,12 +389,19 @@ function Chosen({ seat, onBack, onRestart }: { seat: Seat | null; onBack: () => 
   return (
     <section className="chosen">
       <p className="kicker">הספר שלכם</p>
-      <h1>{seat.book.title}</h1>
-      <p className="author">
-        {seat.persona.name} {verb}
-      </p>
-      <BookFacts book={seat.book} />
+      <div className="card-book">
+        <Cover src={seat.book.coverUrl} />
+        <div>
+          <h1>{seat.book.title}</h1>
+          <p className="author">
+            {seat.persona.name} {verb}
+          </p>
+          <BookScore book={seat.book} />
+          <BookFacts book={seat.book} />
+        </div>
+      </div>
       <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
+      <AlsoBooks book={seat.book} />
       <p className="jab">{reviewLine('נגד', seat.book.dissent.reviewer, seat.book.dissent.rating, seat.dissentLead)}</p>
       <p className="note">
         הספר לא נמצא כאן בתוך האפליקציה. קונים אותו או שואלים בספרייה, ואז קוראים. הבחירה נשמרת על המדף במכשיר הזה.

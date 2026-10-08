@@ -223,7 +223,25 @@ h1 { font-size: clamp(36px, 6vw, 68px); line-height: 1.05; max-width: 14ch; }
 .card h2 { font-size: 40px; line-height: 1; margin-top: 4px; }
 .stance { color: var(--muted); margin: 6px 0 16px; }
 .bring { font-size: 13px; color: var(--muted); }
-.card h3 { font-size: clamp(28px, 3vw, 36px); line-height: 1.15; margin: 4px 0; }
+.card h3 { font-size: clamp(26px, 3vw, 34px); line-height: 1.15; margin: 0; }
+.card-book { display: flex; gap: 12px; align-items: flex-start; }
+.card-cover, .card-cover-fallback {
+  width: 76px;
+  height: 112px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #e7dccb;
+  flex: 0 0 auto;
+}
+.score { margin: 6px 0 0; font-size: 14px; font-weight: 700; }
+.also { margin-top: 12px; }
+.also-kicker, .also-name { font-size: 13px; font-weight: 700; margin: 0 0 4px; }
+.also-name { margin-top: 8px; }
+.also ul { margin: 0; padding-inline-start: 1.1em; }
+.also li { margin: 2px 0; font-size: 14px; }
+.also a { color: var(--yael); font-weight: 700; text-decoration: none; }
+.also a:hover { text-decoration: underline; }
+.also-more { color: var(--muted); }
 .author { font-weight: 500; }
 .meta { color: var(--muted); font-size: 14px; margin-top: 4px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 12px 0 0; }
@@ -268,8 +286,9 @@ h1 { font-size: clamp(36px, 6vw, 68px); line-height: 1.05; max-width: 14ch; }
   font-size: 13px;
   letter-spacing: 0.06em;
 }
-.chosen .facts, .chosen .blurb { color: var(--paper); }
-.chosen .expand { color: var(--gold); }
+.chosen .facts, .chosen .blurb, .chosen .score, .chosen .also-kicker, .chosen .also-name { color: var(--paper); }
+.chosen .expand, .chosen .also a { color: var(--gold); }
+.chosen .also-more { color: #d9cbb8; }
 .voices { display: grid; gap: 12px; margin-top: 16px; }
 .voice { margin: 0; padding: 12px 14px; background: var(--paper-2); border-radius: 14px; }
 .voice p { font-family: var(--serif); font-size: 17px; line-height: 1.45; }
