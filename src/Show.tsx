@@ -169,7 +169,7 @@ function AlsoList({ person }: { person: DisputedBook['advocates'][number] }) {
           {item.author ? <span> · {item.author}</span> : null}
         </li>
       ))}
-      {person.more > 0 && <li className="also-more">ועוד {person.more}</li>}
+      {person.more > 0 && <li className="also-more">ועוד {person.more} ספרים</li>}
     </ul>
   )
 }
