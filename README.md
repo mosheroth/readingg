@@ -14,6 +14,16 @@
 npm run table
 ```
 
+## אתר סטטי
+
+האתר שמתפרסם הוא קבצים סטטיים בלבד. אין שרת, אין מסד, ואין קריאה ל־API בזמן אמת. הבחירה, הסקר והקטלוג נטענים מהנתונים שנאפו לתוך האתר.
+
+GitHub Actions (`.github/workflows/pages.yml`) בונה עם `BASE_PATH=/readingg/` ומפרסם ל־GitHub Pages. הכתובת:
+
+https://mosheroth.github.io/readingg/
+
+כדי שהפרסום ירוץ, בריפו: Settings → Pages → Build and deployment → Source: GitHub Actions. הריפו פרטי, אז Pages דורש תוכנית שתומכת באתר פרטי, או שהריפו יהיה ציבורי.
+
 ## הרצה
 
 ```bash
@@ -22,34 +32,29 @@ npm test
 npm run dev
 ```
 
-בניית אתר להתקנה ב־Chrome:
+בניית האתר, כולל רענון הנתונים מהקבצים:
 
 ```bash
 npm run build
 npm run preview
 ```
 
+בדיקה של אותו נתיב כמו ב־Pages:
+
+```bash
+BASE_PATH=/readingg/ npm run build
+npm run preview
+```
+
+ואז http://127.0.0.1:4173/readingg/
+
 ## מאגר סימניה
 
-השולחן גם אוסף מסימניה קטלוג של ספרים שעלו בביקורות בשנתיים האחרונות. הביקורת נשמרת במסד. באתר מוצג תקציר וקישור לעמוד בסימניה, לא עותק של האתר.
+הנתונים נאספים מקומית לשני קבצים. `data/simania-reviews.csv` הוא שורה לכל ביקורת. `data/simania-books.csv` הוא שורה לכל ספר, פעם אחת, גם כשיש עליו כמה ביקורות. `npm run build` ו־`npm run table` הופכים אותם למודולים שהאתר טוען. באתר מוצג תקציר וקישור לסימניה, לא עותק של האתר.
 
 האיסוף לא נכנס ל־`/api/*` של סימניה ולא לעמודים עם `?page=`, כי `robots.txt` שלהם חוסם את זה. בין בקשה לבקשה יש המתנה.
 
-מסד הנתונים הוא Postgres של ורסל (Neon). בתוכנית החינמית אי אפשר להריץ cron כל שעה, רק פעם ביום, ולכן:
-
-- ורסל מפעיל כל יום את `/api/cron/sample` ואת `/api/cron/backfill`.
-- GitHub Actions (`.github/workflows/simania-hourly.yml`) רץ כל שעה עם כרום, כי קלאודפלייר של סימניה חוסם קריאת HTTP רגילה ממרכז נתונים. הדפדפן כן עובר.
-
-### חיבור
-
-1. בפרויקט ורסל: Storage → Create Database → Postgres. זה מגדיר `POSTGRES_URL`.
-2. להגדיר גם `DATABASE_URL` לאותו ערך, ו־`CRON_SECRET` למחרוזת ארוכה ואקראית.
-3. בריפו בגיטהאב: Secret בשם `DATABASE_URL` עם אותו מחרוזת חיבור.
-4. אחרי דיפלוי, «המאגר» באתר קורא מ־`/api/books`.
-
-מילוי אחורה יורד ממספר הביקורת החדש ביותר עד רצף של ביקורות ישנות משנתיים. כל הרצה שומרת צעד, אז השעה הבאה ממשיכה מהמקום שעצר.
-
-הרצה מקומית לשני קבצים, בלי מסד נתונים. `data/simania-reviews.csv` הוא שורה לכל ביקורת. `data/simania-books.csv` הוא שורה לכל ספר, פעם אחת, גם כשיש עליו כמה ביקורות. הרצה נוספת ממשיכה מהמספר שבו הקודם עצר:
+הרצה נוספת ממשיכה מהמספר שבו הקודם עצר:
 
 ```bash
 npm run crawl -- csv
@@ -69,10 +74,4 @@ npm run crawl -- books
 npm run crawl -- csv --limit 2000 --budget 3600000
 ```
 
-הרצה מקומית אל Postgres, אחרי ש־`DATABASE_URL` מצביע למסד וכרום מותקן:
-
-```bash
-npm run crawl -- sample --limit 8
-npm run crawl -- backfill --limit 12
-npm run crawl -- status
-```
+אחרי איסוף, `npm run build` או `npm run table` מכניסים את השורות לאתר. דחיפה ל־`main` מפרסמת את האתר מחדש.
