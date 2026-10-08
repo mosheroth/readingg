@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { arguedBooks, catalogSeeds, fold, pickThree, searchBooks, type TableAnswers } from './table'
+import { arguedBooks, catalogSeeds, descriptionLead, fold, pickThree, searchBooks, type TableAnswers } from './table'
 
 describe('argued books', () => {
   it('keeps only books that have a real recommendation and a real rejection', () => {
@@ -16,6 +16,17 @@ describe('argued books', () => {
       expect(book.dissent.url).toContain('simania.co.il')
       expect(book.praise.reviewId).not.toBe(book.dissent.reviewId)
     }
+  })
+})
+
+describe('descriptionLead', () => {
+  it('keeps the first line and leaves the rest for MORE', () => {
+    expect(descriptionLead('שורה ראשונה.\nעוד שורה.\n\nועוד אחת.')).toEqual({
+      lead: 'שורה ראשונה.',
+      rest: 'עוד שורה.\n\nועוד אחת.',
+    })
+    expect(descriptionLead('רק שורה אחת.')).toEqual({ lead: 'רק שורה אחת.', rest: '' })
+    expect(descriptionLead('')).toEqual({ lead: '', rest: '' })
   })
 })
 

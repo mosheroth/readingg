@@ -26,6 +26,7 @@ export interface DisputedBook {
   id: string
   title: string
   author: string
+  translator: string
   year: number | null
   pages: number | null
   category: string
@@ -33,8 +34,16 @@ export interface DisputedBook {
   origin: TableOrigin
   coverUrl: string
   bookUrl: string
+  description: string
   praise: Voice
   dissent: Voice
+}
+
+export function descriptionLead(description: string): { lead: string; rest: string } {
+  const text = description.replace(/\r\n/g, '\n').trim()
+  if (!text) return { lead: '', rest: '' }
+  const [first, ...more] = text.split('\n')
+  return { lead: first.trim(), rest: more.join('\n').trim() }
 }
 
 export interface TableAnswers {
@@ -149,13 +158,21 @@ function diverse(ranked: DisputedBook[], count: number): DisputedBook[] {
   return chosen
 }
 
+export function contextScore(book: DisputedBook, answers: Pick<TableAnswers, 'seedId' | 'direction'>): number {
+  return scoreBook(book, seedById(answers.seedId), answers.direction)
+}
+
+export function poolFor(origin: OriginChoice, banned: Set<string>): DisputedBook[] {
+  return narrowOrigin(
+    arguedBooks.filter((book) => !banned.has(book.id)),
+    origin,
+  )
+}
+
 export function pickThree(answers: TableAnswers, exclude: string[] = []): DisputedBook[] {
   const banned = new Set(exclude)
   if (answers.seedId) banned.add(answers.seedId)
-  const pool = narrowOrigin(
-    arguedBooks.filter((book) => !banned.has(book.id)),
-    answers.origin,
-  )
+  const pool = poolFor(answers.origin, banned)
   const seed = seedById(answers.seedId)
   const ranked = pool
     .map((book) => ({ book, score: scoreBook(book, seed, answers.direction) }))

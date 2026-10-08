@@ -1,5 +1,6 @@
-import type { Direction, OriginChoice, TableAnswers } from './engine/table'
-import type { Answers, Recommendation } from './types'
+import type { Seat, SeatAnswers } from './engine/seat'
+import type { Direction } from './engine/table'
+import type { Heaviness, Life, Moment, Seek, Sofa } from './types'
 
 const SHELF_KEY = 'shulchan-shelf'
 const SESSION_KEY = 'shulchan-session'
@@ -13,20 +14,21 @@ export interface ShelfItem {
   chosenAt: number
 }
 
-export interface ShowDraft {
+export interface SeatDraft {
   seedId: string | null
   direction?: Direction
-  origin?: OriginChoice
+  seek?: Seek
+  heaviness?: Heaviness
+  moment?: Moment
+  life?: Life
+  sofa?: Sofa
 }
 
 export type Session =
   | { name: 'intro' }
-  | { name: 'quiz'; step: number; answers: Partial<Answers> }
-  | { name: 'results'; answers: Answers; exclude: string[] }
-  | { name: 'chosen'; answers: Answers; exclude: string[]; bookId: string; personaId: string }
-  | { name: 'show'; step: 0 | 1 | 2; draft: ShowDraft }
-  | { name: 'show-results'; answers: TableAnswers; exclude: string[] }
-  | { name: 'show-chosen'; answers: TableAnswers; exclude: string[]; bookId: string }
+  | { name: 'quiz'; step: number; draft: SeatDraft }
+  | { name: 'results'; answers: SeatAnswers; exclude: string[] }
+  | { name: 'chosen'; answers: SeatAnswers; exclude: string[]; bookId: string; personaId: string }
 
 function isShelfItem(value: unknown): value is ShelfItem {
   if (!value || typeof value !== 'object') return false
@@ -51,44 +53,47 @@ function writeShelf(next: ShelfItem): ShelfItem[] {
   return shelf
 }
 
-export function saveChoice(rec: Recommendation): ShelfItem[] {
+export function saveSeat(seat: Seat): ShelfItem[] {
   return writeShelf({
-    bookId: rec.book.id,
-    personaId: rec.persona.id,
-    personaName: rec.persona.name,
-    title: rec.book.title,
-    author: rec.book.author,
+    bookId: seat.book.id,
+    personaId: seat.persona.id,
+    personaName: seat.persona.name,
+    title: seat.book.title,
+    author: seat.book.author,
     chosenAt: Date.now(),
   })
 }
 
-export function saveTableChoice(book: { id: string; title: string; author: string }): ShelfItem[] {
-  return writeShelf({
-    bookId: book.id,
-    personaId: 'table',
-    personaName: 'השולחן',
-    title: book.title,
-    author: book.author,
-    chosenAt: Date.now(),
-  })
+function isSeatAnswers(value: unknown): value is SeatAnswers {
+  if (!value || typeof value !== 'object') return false
+  const answers = value as SeatAnswers
+  return (
+    (typeof answers.seedId === 'string' || answers.seedId === null) &&
+    typeof answers.direction === 'string' &&
+    typeof answers.seek === 'string' &&
+    typeof answers.heaviness === 'string' &&
+    typeof answers.moment === 'string' &&
+    typeof answers.life === 'string' &&
+    typeof answers.sofa === 'string' &&
+    typeof answers.origin === 'string'
+  )
 }
 
 function isSession(value: unknown): value is Session {
   if (!value || typeof value !== 'object') return false
   const session = value as Session
   if (session.name === 'intro') return true
-  if (session.name === 'quiz') return typeof session.step === 'number' && typeof session.answers === 'object'
-  if (session.name === 'results' || session.name === 'chosen') {
-    return typeof session.answers === 'object' && Array.isArray(session.exclude)
+  if (session.name === 'quiz') {
+    return session.step >= 0 && session.step <= 7 && typeof session.draft === 'object' && session.draft !== null
   }
-  if (session.name === 'show') {
-    return (session.step === 0 || session.step === 1 || session.step === 2) && typeof session.draft === 'object'
-  }
-  if (session.name === 'show-results') {
-    return typeof session.answers?.direction === 'string' && Array.isArray(session.exclude)
-  }
-  if (session.name === 'show-chosen') {
-    return typeof session.answers?.direction === 'string' && Array.isArray(session.exclude) && typeof session.bookId === 'string'
+  if (session.name === 'results') return isSeatAnswers(session.answers) && Array.isArray(session.exclude)
+  if (session.name === 'chosen') {
+    return (
+      isSeatAnswers(session.answers) &&
+      Array.isArray(session.exclude) &&
+      typeof session.bookId === 'string' &&
+      typeof session.personaId === 'string'
+    )
   }
   return false
 }

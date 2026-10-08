@@ -160,6 +160,7 @@ for (const row of bookRows.slice(1)) {
     id,
     title,
     author,
+    translator,
     year,
     pages,
     category,
@@ -167,6 +168,7 @@ for (const row of bookRows.slice(1)) {
     origin,
     coverUrl,
     bookUrl,
+    description: cleanDescription(row[bookIndex.description] ?? ''),
     praise: publicSide(good),
     dissent: publicSide(bad),
   })
@@ -174,6 +176,17 @@ for (const row of bookRows.slice(1)) {
 
 catalog.sort((a, b) => a.id.localeCompare(b.id))
 disputed.sort((a, b) => a.id.localeCompare(b.id))
+
+function cleanDescription(raw: string): string {
+  return raw
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, 4000)
+}
 
 function publicSide(voice: ReviewSide) {
   return {
@@ -204,6 +217,7 @@ const bookType = `Array<{
   id: string
   title: string
   author: string
+  translator: string
   year: number | null
   pages: number | null
   category: string
@@ -211,6 +225,7 @@ const bookType = `Array<{
   origin: 'original' | 'translated' | 'unknown'
   coverUrl: string
   bookUrl: string
+  description: string
   praise: { reviewId: string; reviewer: string; rating: number; excerpt: string; url: string }
   dissent: { reviewId: string; reviewer: string; rating: number; excerpt: string; url: string }
 }>`

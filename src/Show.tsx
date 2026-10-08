@@ -1,15 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  bookByTableId,
-  searchBooks,
-  seedById,
-  tableSummary,
-  type CatalogSeed,
-  type Direction,
-  type DisputedBook,
-  type OriginChoice,
-  type TableAnswers,
-} from './engine/table'
+import { descriptionLead, searchBooks, seedById, type CatalogSeed, type Direction, type DisputedBook } from './engine/table'
 
 export function BookStep({ onPick, onSkip, onBack }: { onPick: (seed: CatalogSeed) => void; onSkip: () => void; onBack: () => void }) {
   const [query, setQuery] = useState('')
@@ -117,178 +107,37 @@ export function DirectionStep({
   )
 }
 
-export function OriginStep({ onChoose, onBack }: { onChoose: (value: OriginChoice) => void; onBack: () => void }) {
-  const options: { value: OriginChoice; label: string; hint: string }[] = [
-    { value: 'original', label: 'ספרות מקור', hint: 'נכתב בעברית' },
-    { value: 'translated', label: 'מתורגם', hint: 'הגיע משפה אחרת' },
-    { value: 'either', label: 'לא משנה', hint: 'הויכוח יותר חשוב מהמדף' },
-  ]
-  useNumberKeys(options, (value) => onChoose(value as OriginChoice), onBack)
+function factList(book: DisputedBook): string[] {
+  const shelf = book.subcategory || book.category
+  const origin =
+    book.origin === 'original' ? 'מקור' : book.origin === 'translated' ? (book.translator ? `תרגום: ${book.translator}` : 'תרגום') : ''
+  return [book.author, shelf, origin].filter((item): item is string => Boolean(item))
+}
+
+export function BookFacts({ book }: { book: DisputedBook }) {
+  const [open, setOpen] = useState(false)
+  const facts = factList(book)
+  const { lead, rest } = descriptionLead(book.description)
   return (
-    <section className="quiz">
-      <h1>מקור או תרגום?</h1>
-      <div className="options">
-        {options.map((option, index) => (
-          <button key={option.value} className="option" type="button" onClick={() => onChoose(option.value)}>
-            <span className="index">{index + 1}</span>
-            <span>
-              <strong>{option.label}</strong>
-              <small>{option.hint}</small>
-            </span>
-          </button>
-        ))}
-      </div>
-      <button className="texty" type="button" onClick={onBack}>
-        חזרה
-      </button>
-    </section>
-  )
-}
-
-export function ShowDebate() {
-  return (
-    <section className="debate" aria-live="polite">
-      <p className="kicker">רגע</p>
-      <h1>מחפשים ספר שיש עליו ויכוח.</h1>
-      <p className="lede">לא ממוצע גבוה. ספר שמישהו אהב, ומישהו אחר דחה.</p>
-    </section>
-  )
-}
-
-function metaLine(book: DisputedBook): string {
-  return [book.author, book.year, book.subcategory, book.pages ? `${book.pages} עמודים` : '']
-    .filter(Boolean)
-    .join(' · ')
-}
-
-function Cover({ src }: { src: string }) {
-  const [failed, setFailed] = useState(false)
-  if (!src || failed) return <div className="cover-fallback" aria-hidden="true" />
-  return <img className="fight-cover" src={src} alt="" onError={() => setFailed(true)} />
-}
-
-function Voices({ book }: { book: DisputedBook }) {
-  return (
-    <div className="voices">
-      <blockquote className="voice voice-good">
-        <p className="voice-tag">
-          בעד · {book.praise.reviewer} · דירוג {book.praise.rating} מתוך 5
-        </p>
-        <p>{book.praise.excerpt}</p>
-        <a href={book.praise.url} target="_blank" rel="noreferrer">
-          הביקורת בסימניה
-        </a>
-      </blockquote>
-      <blockquote className="voice voice-bad">
-        <p className="voice-tag">
-          נגד · {book.dissent.reviewer} · דירוג {book.dissent.rating} מתוך 5
-        </p>
-        <p>{book.dissent.excerpt}</p>
-        <a href={book.dissent.url} target="_blank" rel="noreferrer">
-          הביקורת בסימניה
-        </a>
-      </blockquote>
-    </div>
-  )
-}
-
-export function ShowResults({
-  answers,
-  picks,
-  canReroll,
-  onChoose,
-  onReroll,
-  onRestart,
-}: {
-  answers: TableAnswers
-  picks: DisputedBook[]
-  canReroll: boolean
-  onChoose: (book: DisputedBook) => void
-  onReroll: () => void
-  onRestart: () => void
-}) {
-  return (
-    <section className="results">
-      <p className="kicker">שלושה ספרים על השולחן</p>
-      <h1>על כל אחד יש מי שבעד ומי שנגד.</h1>
-      <p className="summary">{tableSummary(answers)}</p>
-      <div className="fights">
-        {picks.map((book) => (
-          <article key={book.id} className="card fight-card">
-            <div className="fight-head">
-              <Cover src={book.coverUrl} />
-              <div>
-                <h2>{book.title}</h2>
-                <p className="meta">{metaLine(book)}</p>
-              </div>
-            </div>
-            <Voices book={book} />
-            <button className="primary" type="button" onClick={() => onChoose(book)}>
-              זה הספר
+    <>
+      {facts.length > 0 && (
+        <ul className="facts">
+          {facts.map((fact) => (
+            <li key={fact}>{fact}</li>
+          ))}
+        </ul>
+      )}
+      {lead && (
+        <div className="blurb">
+          <p>{open && rest ? `${lead}\n${rest}` : lead}</p>
+          {rest && (
+            <button className="expand" type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+              {open ? 'פחות' : 'MORE'}
             </button>
-          </article>
-        ))}
-      </div>
-      <p className="fine">הציטוטים מסימניה, מקוצרים. הביקורת המלאה נפתחת שם. הספר עצמו לא יושב כאן.</p>
-      <div className="row center">
-        {canReroll && (
-          <button className="ghost" type="button" onClick={onReroll}>
-            שלושה אחרים
-          </button>
-        )}
-        <button className="texty" type="button" onClick={onRestart}>
-          מההתחלה
-        </button>
-      </div>
-    </section>
+          )}
+        </div>
+      )}
+    </>
   )
 }
 
-export function ShowChosen({
-  bookId,
-  onBack,
-  onRestart,
-}: {
-  bookId: string
-  onBack: () => void
-  onRestart: () => void
-}) {
-  const book = bookByTableId(bookId)
-  if (!book) {
-    return (
-      <section className="chosen">
-        <h1>הספר כבר לא בסל הוויכוח.</h1>
-        <button className="primary" type="button" onClick={onRestart}>
-          מההתחלה
-        </button>
-      </section>
-    )
-  }
-  return (
-    <section className="chosen wide">
-      <p className="kicker">הספר שלכם</p>
-      <div className="fight-head">
-        <Cover src={book.coverUrl} />
-        <div>
-          <h1>{book.title}</h1>
-          <p className="author">{metaLine(book)}</p>
-        </div>
-      </div>
-      <Voices book={book} />
-      <p className="note">
-        הספר לא נמצא כאן בתוך האפליקציה. קונים אותו או שואלים בספרייה, ואז קוראים. הבחירה נשמרת על המדף במכשיר הזה.
-      </p>
-      <div className="row">
-        <a className="primary linkish" href={book.bookUrl} target="_blank" rel="noreferrer">
-          לעמוד הספר בסימניה
-        </a>
-        <button className="ghost" type="button" onClick={onBack}>
-          חזרה לשלושה
-        </button>
-        <button className="texty" type="button" onClick={onRestart}>
-          מההתחלה
-        </button>
-      </div>
-    </section>
-  )
-}
