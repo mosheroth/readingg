@@ -134,20 +134,20 @@ function formatScore(value: number): string {
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
 }
 
-export function BookFacts({ book }: { book: DisputedBook }) {
+export function BookFacts({ book, part = 'all' }: { book: DisputedBook; part?: 'all' | 'facts' | 'blurb' }) {
   const [open, setOpen] = useState(false)
   const facts = factList(book)
   const { lead, rest } = descriptionLead(book.description)
   return (
     <>
-      {facts.length > 0 && (
+      {part !== 'blurb' && facts.length > 0 && (
         <ul className="facts">
           {facts.map((fact) => (
             <li key={fact}>{fact}</li>
           ))}
         </ul>
       )}
-      {lead && (
+      {part !== 'facts' && lead && (
         <div className="blurb">
           <p>{open && rest ? `${lead}\n${rest}` : lead}</p>
           {rest && (

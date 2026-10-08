@@ -336,7 +336,7 @@ function Results({
               <div>
                 <h2>{seat.book.title}</h2>
                 <BookScore book={seat.book} />
-                <BookFacts book={seat.book} />
+                <BookFacts book={seat.book} part="facts" />
               </div>
             </div>
             <div className="why">
@@ -347,6 +347,7 @@ function Results({
                 ))}
               </ul>
             </div>
+            <BookFacts book={seat.book} part="blurb" />
             <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
             <p className="jab">{reviewLine('נגד', seat.book.dissent.reviewer, seat.book.dissent.rating, seat.dissentLead)}</p>
             <button className="primary" type="button" onClick={() => onChoose(seat)}>
@@ -389,7 +390,7 @@ function Chosen({ seat, onBack, onRestart }: { seat: Seat | null; onBack: () => 
         <div>
           <h1>{seat.book.title}</h1>
           <BookScore book={seat.book} />
-          <BookFacts book={seat.book} />
+          <BookFacts book={seat.book} part="facts" />
         </div>
       </div>
       <div className="why">
@@ -400,6 +401,7 @@ function Chosen({ seat, onBack, onRestart }: { seat: Seat | null; onBack: () => 
           ))}
         </ul>
       </div>
+      <BookFacts book={seat.book} part="blurb" />
       <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
       <p className="jab">{reviewLine('נגד', seat.book.dissent.reviewer, seat.book.dissent.rating, seat.dissentLead)}</p>
       <p className="note">
