@@ -19,7 +19,9 @@ describe('seatThree', () => {
     expect(seats).toHaveLength(3)
     expect(new Set(seats.map((seat) => seat.book.id)).size).toBe(3)
     expect(seats.every((seat) => seat.book.origin === 'translated')).toBe(true)
-    expect(seats.every((seat) => seat.reasons.length > 0 && seat.reasons.length <= 4)).toBe(true)
+    expect(seats.every((seat) => seat.reasons.length > 0 && seat.reasons.length <= 3)).toBe(true)
+    const lines = seats.flatMap((seat) => seat.reasons)
+    expect(new Set(lines).size).toBe(lines.length)
     expect(seats.every((seat) => seat.praiseLead.length > 20 && seat.dissentLead.length > 10)).toBe(true)
     expect(seatThree(base).map((seat) => seat.book.id)).toEqual(seats.map((seat) => seat.book.id))
   })
@@ -41,6 +43,9 @@ describe('seatThree', () => {
     expect(seats.every((seat) => seat.book.origin === 'original')).toBe(true)
     expect(seats.some((seat) => seat.book.subcategory === 'ספרות מקורית')).toBe(true)
     expect(seats.some((seat) => seat.book.id === seed!.id)).toBe(false)
+    const lines = seats.flatMap((seat) => seat.reasons)
+    expect(new Set(lines).size).toBe(lines.length)
+    expect(lines.filter((line) => line.includes('ביקשתם שזה ייגע')).length).toBeLessThanOrEqual(1)
   })
 
   it('offers another three that were not already seated', () => {
