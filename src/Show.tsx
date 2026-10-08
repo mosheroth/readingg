@@ -111,7 +111,8 @@ function factList(book: DisputedBook): string[] {
   const shelf = book.subcategory || book.category
   const origin =
     book.origin === 'original' ? 'מקור' : book.origin === 'translated' ? (book.translator ? `תרגום: ${book.translator}` : 'תרגום') : ''
-  return [book.author, shelf, origin].filter((item): item is string => Boolean(item))
+  const year = book.year ? `יצא ב־${book.year}` : ''
+  return [book.author, year, shelf, origin].filter((item): item is string => Boolean(item))
 }
 
 export function Cover({ src }: { src: string }) {
