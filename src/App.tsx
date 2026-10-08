@@ -3,7 +3,7 @@ import Catalog from './Catalog'
 import { questions } from './data/questions'
 import { seatSummary, seatThree, type Seat, type SeatAnswers } from './engine/seat'
 import { arguedBooks, type OriginChoice } from './engine/table'
-import { AlsoBooks, BookFacts, BookScore, BookStep, Cover, DirectionStep } from './Show'
+import { BookFacts, BookScore, BookStep, Cover, DirectionStep } from './Show'
 import { loadSession, loadShelf, saveSeat, saveSession, type SeatDraft, type Session, type ShelfItem } from './storage'
 import type { Heaviness, Life, Moment, Seek, Sofa } from './types'
 
@@ -166,7 +166,7 @@ export default function App() {
                 answers: session.answers,
                 exclude: session.exclude,
                 bookId: seat.book.id,
-                personaId: seat.persona.id,
+                personaId: 'table',
               })
             }}
             onReroll={() => openResults(session.answers, [...session.exclude, ...seats.map((seat) => seat.book.id)])}
@@ -175,7 +175,7 @@ export default function App() {
         )}
         {pane === 'table' && session.name === 'chosen' && (
           <Chosen
-            seat={seats.find((seat) => seat.book.id === session.bookId && seat.persona.id === session.personaId) ?? null}
+            seat={seats.find((seat) => seat.book.id === session.bookId) ?? null}
             onBack={() => setSession({ name: 'results', answers: session.answers, exclude: session.exclude })}
             onRestart={() => setSession({ name: 'quiz', step: 0, draft: { seedId: null } })}
           />
@@ -199,10 +199,10 @@ function Intro({
   return (
     <section className="intro">
       <p className="kicker">אתה חייב לקרוא את זה</p>
-      <h1>יעל, תום ונדב, ושלושה ספרים.</h1>
+      <h1>שלושה ספרים, ועל כל אחד ויכוח.</h1>
       <p className="lede">
-        אומרים מה קראתם לאחרונה, לאן להמשיך, ומה בא לכם מהספר. כל אחד מהשלושה מניח ספר אחר, עם ביקורת טובה וביקורת רעה
-        אמיתיות. קוראים ובוחרים.
+        אומרים מה קראתם לאחרונה ומה בא לכם עכשיו. על השולחן עולים שלושה ספרים, עם הסבר למה כל אחד מתאים, ועם ביקורת טובה
+        וביקורת רעה אמיתיות.
       </p>
       <p className="fine">
         כרגע יש {arguedBooks.length} ספרים כאלה במאגר. בלי ביקורת נגדית אמיתית הספר לא נכנס. זו לא תוכנית הטלוויזיה,
@@ -291,8 +291,8 @@ function Debate() {
   return (
     <section className="debate" aria-live="polite">
       <p className="kicker">רגע</p>
-      <h1>הם מתווכחים בחדר השני.</h1>
-      <p className="lede">יעל רוצה שזה יישאר. תום רוצה שלא תישנו. נדב רוצה שתצאו אחרים.</p>
+      <h1>שלושה ספרים עולים.</h1>
+      <p className="lede">לפי מה שסיפרתם, ולפי קוראים שכבר המליצו על ספר קרוב.</p>
     </section>
   )
 }
@@ -326,32 +326,28 @@ function Results({
   return (
     <section className="results">
       <p className="kicker">שלושה ספרים על השולחן</p>
-      <h1>כל אחד נלחם על ספר אחר.</h1>
+      <h1>שלושה ספרים לפי מה שסיפרתם.</h1>
       <p className="summary">{seatSummary(answers)}</p>
       <div className="cards">
         {seats.map((seat) => (
-          <article key={seat.persona.id} className={`card persona-${seat.persona.id}`}>
-            <p className="role">{seat.persona.role}</p>
-            <h2>{seat.persona.name}</h2>
-            <p className="stance">{seat.persona.stance}</p>
-            <p className="bring">{seat.persona.id === 'yael' ? 'מביאה את' : 'מביא את'}</p>
+          <article key={seat.book.id} className="card">
             <div className="card-book">
               <Cover src={seat.book.coverUrl} />
               <div>
-                <h3>{seat.book.title}</h3>
+                <h2>{seat.book.title}</h2>
                 <BookScore book={seat.book} />
                 <BookFacts book={seat.book} />
               </div>
             </div>
-            {seat.reasons.length > 0 && (
-              <ul className="chips">
+            <div className="why">
+              <p className="why-kicker">למה זה מתאים</p>
+              <ul>
                 {seat.reasons.map((reason) => (
                   <li key={reason}>{reason}</li>
                 ))}
               </ul>
-            )}
+            </div>
             <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
-            <AlsoBooks book={seat.book} />
             <p className="jab">{reviewLine('נגד', seat.book.dissent.reviewer, seat.book.dissent.rating, seat.dissentLead)}</p>
             <button className="primary" type="button" onClick={() => onChoose(seat)}>
               זה הספר
@@ -385,7 +381,6 @@ function Chosen({ seat, onBack, onRestart }: { seat: Seat | null; onBack: () => 
       </section>
     )
   }
-  const verb = seat.persona.id === 'yael' ? 'שכנעה' : 'שכנע'
   return (
     <section className="chosen">
       <p className="kicker">הספר שלכם</p>
@@ -393,15 +388,19 @@ function Chosen({ seat, onBack, onRestart }: { seat: Seat | null; onBack: () => 
         <Cover src={seat.book.coverUrl} />
         <div>
           <h1>{seat.book.title}</h1>
-          <p className="author">
-            {seat.persona.name} {verb}
-          </p>
           <BookScore book={seat.book} />
           <BookFacts book={seat.book} />
         </div>
       </div>
+      <div className="why">
+        <p className="why-kicker">למה זה מתאים</p>
+        <ul>
+          {seat.reasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      </div>
       <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
-      <AlsoBooks book={seat.book} />
       <p className="jab">{reviewLine('נגד', seat.book.dissent.reviewer, seat.book.dissent.rating, seat.dissentLead)}</p>
       <p className="note">
         הספר לא נמצא כאן בתוך האפליקציה. קונים אותו או שואלים בספרייה, ואז קוראים. הבחירה נשמרת על המדף במכשיר הזה.

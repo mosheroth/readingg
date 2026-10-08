@@ -56,8 +56,8 @@ function writeShelf(next: ShelfItem): ShelfItem[] {
 export function saveSeat(seat: Seat): ShelfItem[] {
   return writeShelf({
     bookId: seat.book.id,
-    personaId: seat.persona.id,
-    personaName: seat.persona.name,
+    personaId: 'table',
+    personaName: '',
     title: seat.book.title,
     author: seat.book.author,
     chosenAt: Date.now(),

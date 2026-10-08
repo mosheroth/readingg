@@ -134,47 +134,6 @@ function formatScore(value: number): string {
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
 }
 
-export function AlsoBooks({ book }: { book: DisputedBook }) {
-  const people = book.advocates
-  if (people.length === 0) return null
-  if (people.length === 1) {
-    const person = people[0]
-    return (
-      <div className="also">
-        <p className="also-kicker">עוד ספרים של {person.reviewer}</p>
-        <AlsoList person={person} />
-      </div>
-    )
-  }
-  return (
-    <div className="also">
-      <p className="also-kicker">עוד ספרים שהמליצו עליהם</p>
-      {people.map((person) => (
-        <div key={`${person.reviewer}-${person.also[0]?.id}`}>
-          <p className="also-name">{person.reviewer}</p>
-          <AlsoList person={person} />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function AlsoList({ person }: { person: DisputedBook['advocates'][number] }) {
-  return (
-    <ul>
-      {person.also.map((item) => (
-        <li key={item.id}>
-          <a href={item.url} target="_blank" rel="noreferrer">
-            {item.title}
-          </a>
-          {item.author ? <span> · {item.author}</span> : null}
-        </li>
-      ))}
-      {person.more > 0 && <li className="also-more">ועוד {person.more} ספרים</li>}
-    </ul>
-  )
-}
-
 export function BookFacts({ book }: { book: DisputedBook }) {
   const [open, setOpen] = useState(false)
   const facts = factList(book)

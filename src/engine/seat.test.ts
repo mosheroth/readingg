@@ -14,11 +14,12 @@ const base: SeatAnswers = {
 }
 
 describe('seatThree', () => {
-  it('seats three different readers with three different books', () => {
+  it('offers three different books and says why each one fits', () => {
     const seats = seatThree(base)
-    expect(seats.map((seat) => seat.persona.id)).toEqual(['yael', 'tom', 'nadav'])
+    expect(seats).toHaveLength(3)
     expect(new Set(seats.map((seat) => seat.book.id)).size).toBe(3)
     expect(seats.every((seat) => seat.book.origin === 'translated')).toBe(true)
+    expect(seats.every((seat) => seat.reasons.length > 0 && seat.reasons.length <= 4)).toBe(true)
     expect(seats.every((seat) => seat.praiseLead.length > 20 && seat.dissentLead.length > 10)).toBe(true)
     expect(seatThree(base).map((seat) => seat.book.id)).toEqual(seats.map((seat) => seat.book.id))
   })
@@ -50,6 +51,11 @@ describe('seatThree', () => {
     )
     expect(next).toHaveLength(3)
     expect(next.every((seat) => !first.some((item) => item.book.id === seat.book.id))).toBe(true)
+    const poolIds = new Set(
+      arguedBooks.filter((book) => book.origin === 'translated' && !first.some((seat) => seat.book.id === book.id)).map((book) => book.id),
+    )
+    const hasLink = first.some((seat) => seat.book.advocates.some((person) => person.also.some((item) => poolIds.has(item.id))))
+    if (hasLink) expect(next.some((seat) => seat.reasons.some((reason) => reason.includes('המליץ גם')))).toBe(true)
   })
 
   it('shortens a review to its first sentence', () => {
