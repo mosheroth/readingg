@@ -1,80 +1,53 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { sliceCatalog, type CatalogEntry } from './engine/catalog'
 
-interface CatalogBook {
-  id: number
-  title: string
-  author: string | null
-  translator: string | null
-  publisher: string | null
-  publishedYear: number | null
-  category: string | null
-  subcategory: string | null
-  coverUrl: string | null
-  url: string
-  reviewCount: number
-  avgRating: number | null
-  excerpt: string | null
-  reviewUrl: string | null
+interface CatalogData {
+  catalogBooks: CatalogEntry[]
+  reviewTotal: number
 }
 
-interface CatalogResponse {
-  ok: boolean
-  error?: string
-  books: CatalogBook[]
-  total: number
-  modernSinceYear?: number
-  counts?: { books: number; reviews: number }
-  backfill?: { done: boolean; seen: number }
-}
+const PAGE = 24
 
 export default function Catalog() {
-  const [modern, setModern] = useState(true)
-  const [books, setBooks] = useState<CatalogBook[]>([])
-  const [total, setTotal] = useState(0)
-  const [year, setYear] = useState<number | null>(null)
-  const [seen, setSeen] = useState(0)
-  const [storedBooks, setStoredBooks] = useState(0)
-  const [done, setDone] = useState(false)
+  const [data, setData] = useState<CatalogData | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [modern, setModern] = useState(true)
   const [offset, setOffset] = useState(0)
 
   useEffect(() => {
-    const controller = new AbortController()
-    setLoading(true)
-    setError(null)
-    const params = new URLSearchParams({ limit: '24', offset: String(offset), modern: modern ? '1' : '0' })
-    fetch(`/api/books?${params}`, { signal: controller.signal })
-      .then(async (response) => {
-        const body = (await response.json()) as CatalogResponse
-        if (!response.ok || !body.ok) throw new Error(body.error || 'לא הצלחנו לטעון את המאגר')
-        setBooks((current) => (offset === 0 ? body.books : [...current, ...body.books]))
-        setTotal(body.total)
-        setYear(body.modernSinceYear ?? null)
-        setSeen(body.counts?.reviews ?? 0)
-        setStoredBooks(body.counts?.books ?? 0)
-        setDone(body.backfill?.done ?? false)
+    let cancelled = false
+    import('./data/catalog-data')
+      .then((mod) => {
+        if (!cancelled) setData({ catalogBooks: mod.catalogBooks, reviewTotal: mod.reviewTotal })
       })
-      .catch((reason: unknown) => {
-        if (reason instanceof DOMException && reason.name === 'AbortError') return
-        if (offset === 0) setBooks([])
-        setTotal(0)
-        setError(reason instanceof Error ? reason.message : 'לא הצלחנו לטעון את המאגר')
+      .catch(() => {
+        if (!cancelled) setError('לא הצלחנו לפתוח את המאגר')
       })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
-      })
-    return () => controller.abort()
-  }, [modern, offset])
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const page = useMemo(() => {
+    if (!data) return null
+    return sliceCatalog(data.catalogBooks, data.reviewTotal, {
+      modern,
+      offset: 0,
+      limit: offset + PAGE,
+      now: new Date(),
+    })
+  }, [data, modern, offset])
+
+  const books = page?.books ?? []
+  const total = page?.total ?? 0
 
   return (
     <section className="catalog">
       <p className="kicker">מסימניה, בלי להעתיק את האתר</p>
-      <h1>ספרים מהשנתיים האחרונות</h1>
+      <h1>הספרים שנאספו</h1>
       <p className="lede">
-        דגימה של ביקורות חדשות כל שעה, ומילוי אחורה עד ביקורות בנות שנתיים. במאגר נשמר הטקסט. כאן מופיע תקציר וקישור
-        לסימניה.
-        {year !== null && modern ? ` מוצגים ספרים שיצאו מ־${year} ואילך, וספרים בלי שנת הוצאה.` : ''}
+        הקטלוג יושב בתוך האתר. אין כאן שרת. לכל ספר יש תקציר וקישור לסימניה, והביקורת המלאה נשארת שם.
+        {page && modern ? ` במבט הזה ספרים שיצאו מ־${page.modernSinceYear} ואילך, וספרים בלי שנת הוצאה.` : ''}
       </p>
       <div className="row">
         <button
@@ -99,13 +72,12 @@ export default function Catalog() {
         </button>
       </div>
       <p className="catalog-status">
-        {loading && 'טוען את המאגר…'}
-        {!loading && error && error}
-        {!loading && !error && `${total} ספרים במבט הזה · ${storedBooks} ספרים ו־${seen} ביקורות במאגר${done ? ' · המילוי אחורה הושלם' : ''}`}
+        {!data && !error && 'טוען את המאגר…'}
+        {error}
+        {page &&
+          `${total} ספרים במבט הזה · ${page.counts.books} ספרים ו־${page.counts.reviews} ביקורות באתר`}
       </p>
-      {!loading && !error && books.length === 0 && (
-        <p className="note">עוד אין כאן ספרים. אחרי החיבור ל־Postgres הדגימה מתחילה למלא את המאגר.</p>
-      )}
+      {page && books.length === 0 && <p className="note">אין ספרים במבט הזה.</p>}
       <ul className="catalog-list">
         {books.map((book) => (
           <li key={book.id} className="book">
@@ -134,9 +106,9 @@ export default function Catalog() {
           </li>
         ))}
       </ul>
-      {books.length < total && (
-        <button className="ghost more" type="button" disabled={loading} onClick={() => setOffset(books.length)}>
-          {loading ? 'טוען…' : 'עוד ספרים'}
+      {page && books.length > 0 && books.length < total && (
+        <button className="ghost more" type="button" onClick={() => setOffset(offset + PAGE)}>
+          עוד ספרים
         </button>
       )}
     </section>
