@@ -18,11 +18,17 @@ npm run table
 
 האתר שמתפרסם הוא קבצים סטטיים בלבד. אין שרת, אין מסד, ואין קריאה ל־API בזמן אמת. הבחירה, הסקר והקטלוג נטענים מהנתונים שנאפו לתוך האתר.
 
-GitHub Actions (`.github/workflows/pages.yml`) בונה עם `BASE_PATH=/readingg/` ומפרסם ל־GitHub Pages. הכתובת:
+GitHub Actions (`.github/workflows/pages.yml`) בונה עם `BASE_PATH=/readingg/` ודוחף את האתר הבנוי לענף `gh-pages`. הכתובת:
 
 https://mosheroth.github.io/readingg/
 
-כדי שהפרסום ירוץ, בריפו: Settings → Pages → Build and deployment → Source: GitHub Actions. הריפו פרטי, אז Pages דורש תוכנית שתומכת באתר פרטי, או שהריפו יהיה ציבורי.
+ב־Settings → Pages → Build and deployment:
+
+- Source: Deploy from a branch
+- Branch: `gh-pages`
+- Folder: `/ (root)`
+
+לא `main`. ענף `main` הוא קוד המקור, ו־Pages בנה ממנו עמוד Jekyll ריק.
 
 ## הרצה
 
