@@ -314,6 +314,15 @@ function Debate() {
   )
 }
 
+function Fit({ fit }: { fit: number }) {
+  return (
+    <p className="fit">
+      <span className="fit-num">{fit}</span>
+      <span className="fit-label">הערכת התאמה, מתוך 100</span>
+    </p>
+  )
+}
+
 function ReadingNote({ seat }: { seat: Seat }) {
   return (
     <div className="reading">
@@ -377,6 +386,7 @@ function Results({
             <Cover src={seat.book.coverUrl} />
             <div className="card-body">
               <h2>{seat.book.title}</h2>
+              <Fit fit={seat.fit} />
               <BookScore book={seat.book} />
               <BookFacts book={seat.book} part="facts" />
               <ReadingNote seat={seat} />
@@ -400,7 +410,7 @@ function Results({
         ))}
       </div>
       <p className="fine">
-        על מה הספר וכבדות הכתיבה נקראו פעם אחת מהתקציר ומשתי הביקורות בסימניה, ונשמרו. הציטוטים הם המשפט הראשון. הספר עצמו לא יושב כאן.
+        הערכת ההתאמה היא כמה מהבקשות בשאלון הספר ממלא. על מה הספר וכבדות הכתיבה נקראו פעם אחת מהתקציר ומשתי הביקורות בסימניה. הציטוטים הם המשפט הראשון. הספר עצמו לא יושב כאן.
       </p>
       <div className="row center">
         {canReroll && (
@@ -478,6 +488,7 @@ function Chosen({ seat, onBack, onRestart }: { seat: Seat | null; onBack: () => 
         <Cover src={seat.book.coverUrl} />
         <div>
           <h1>{seat.book.title}</h1>
+          <Fit fit={seat.fit} />
           <BookScore book={seat.book} />
           <BookFacts book={seat.book} part="facts" />
         </div>

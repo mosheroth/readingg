@@ -22,6 +22,8 @@ export interface Seat {
   proseNote: string
   tags: string[]
   viaNote: string | null
+  /** 0–100. How many of the questionnaire asks this book meets. */
+  fit: number
 }
 
 interface ViaLink {
@@ -62,6 +64,40 @@ function tasteScore(book: DisputedBook, answers: SeatAnswers): number {
   if (answers.sofa === 'mystery' && reading.worlds.includes('suspense')) score += 12
   if (answers.sofa === 'underline' && (reading.prose >= 3 || reading.pull === 'learn')) score += 8
   return score
+}
+
+function momentFit(reading: BookReading, answers: SeatAnswers): number {
+  if (answers.moment === 'regular') return 10
+  if (answers.moment === 'returning' || answers.moment === 'afterHeavy') {
+    if (reading.prose <= 2) return 10
+    if (reading.prose === 3) return 4
+    return 0
+  }
+  if (reading.prose >= 3) return 10
+  if (reading.prose === 2) return 4
+  return 0
+}
+
+function sofaFit(reading: BookReading, answers: SeatAnswers): number {
+  if (answers.sofa === 'devour') {
+    if (reading.prose <= 2) return 10
+    if (reading.prose === 3) return 4
+    return 0
+  }
+  if (answers.sofa === 'quiet') return reading.pull === 'feel' || reading.prose === 2 || reading.prose === 3 ? 10 : 0
+  if (answers.sofa === 'mystery') return reading.worlds.includes('suspense') ? 10 : 0
+  return reading.prose >= 3 || reading.pull === 'learn' ? 10 : 0
+}
+
+/** How much of the questionnaire this book meets, from 0 to 100. Not a Simania rating. */
+export function fitEstimate(book: DisputedBook, answers: SeatAnswers): number {
+  const reading = readingOf(book.id)
+  if (!reading) return 0
+  const distance = Math.min(3, Math.abs(reading.prose - wantedProse[answers.heaviness]))
+  const prose = [30, 18, 8, 0][distance]
+  const life = reading.worlds.some((world) => world === answers.life) ? 25 : 0
+  const seek = reading.pull === answers.seek ? 25 : 0
+  return prose + life + seek + momentFit(reading, answers) + sofaFit(reading, answers)
 }
 
 function linkedFrom(bookId: string, shown: DisputedBook[], chosen: DisputedBook[]): ViaLink[] {
@@ -220,6 +256,7 @@ export function seatThree(answers: SeatAnswers, exclude: string[] = []): Seat[] 
       proseNote: reading ? `הכתיבה ${proseLabel[reading.prose]}. נוגע ב${worldsPhrase(reading.worlds)}.` : '',
       tags: reading ? [`כתיבה ${proseLabel[reading.prose]}`, ...reading.worlds.map((world) => worldLabel[world])] : [],
       viaNote: viaNote(pick.via ?? undefined),
+      fit: fitEstimate(pick.book, answers),
     }
   })
 }

@@ -271,6 +271,9 @@ h1 { font-size: clamp(36px, 6vw, 68px); line-height: 1.05; max-width: 14ch; }
   background: #e7dccb;
   flex: 0 0 auto;
 }
+.fit { display: flex; align-items: baseline; gap: 8px; margin: 8px 0 0; }
+.fit-num { font-family: var(--serif); font-size: 32px; font-weight: 700; line-height: 1; color: var(--yael); }
+.fit-label { font-size: 13px; color: var(--muted); }
 .score { margin: 6px 0 0; font-size: 14px; font-weight: 700; }
 .also { margin-top: 12px; }
 .also-kicker, .also-name { font-size: 13px; font-weight: 700; margin: 0 0 4px; }
@@ -325,6 +328,8 @@ h1 { font-size: clamp(36px, 6vw, 68px); line-height: 1.05; max-width: 14ch; }
   letter-spacing: 0.06em;
 }
 .chosen .facts, .chosen .blurb, .chosen .score, .chosen .why, .chosen .why-kicker, .chosen .about, .chosen .also-kicker, .chosen .also-name { color: var(--paper); }
+.chosen .fit-num { color: var(--gold); }
+.chosen .fit-label { color: #d9cbb8; }
 .chosen .via { background: rgba(246, 241, 231, 0.08); color: var(--paper); }
 .chosen .via-kicker { color: var(--gold); }
 .chosen .chips li { background: rgba(246, 241, 231, 0.12); color: var(--paper); }

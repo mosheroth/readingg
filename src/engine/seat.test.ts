@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readingOf } from '../data/readings'
-import { arguedBooks, catalogSeeds } from './table'
-import { firstSentence, seatThree, type SeatAnswers } from './seat'
+import { arguedBooks, bookByTableId, catalogSeeds } from './table'
+import { fitEstimate, firstSentence, seatThree, type SeatAnswers } from './seat'
 
 const base: SeatAnswers = {
   seedId: null,
@@ -70,6 +70,29 @@ describe('seatThree', () => {
       expect(reading?.about.length).toBeGreaterThan(12)
       expect(reading?.worlds.length).toBeGreaterThan(0)
     }
+  })
+
+  it('scores a closer questionnaire match higher, up to 100', () => {
+    const close = bookByTableId('997641')
+    const far = bookByTableId('1014520')
+    expect(close && far).toBeTruthy()
+    const feel: SeatAnswers = {
+      seedId: null,
+      direction: 'different',
+      seek: 'feel',
+      heaviness: 'lasting',
+      moment: 'regular',
+      life: 'love',
+      sofa: 'quiet',
+      origin: 'translated',
+    }
+    const better = fitEstimate(close!, feel)
+    const worse = fitEstimate(far!, feel)
+    expect(better).toBeGreaterThan(worse)
+    expect(better).toBeLessThanOrEqual(100)
+    expect(worse).toBeGreaterThanOrEqual(0)
+    const seats = seatThree(feel)
+    expect(new Set(seats.map((seat) => seat.fit)).size).toBeGreaterThan(1)
   })
 
   it('names the earlier book when a Simania reader links the next three', () => {
