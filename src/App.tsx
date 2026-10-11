@@ -319,8 +319,24 @@ function ReadingNote({ seat }: { seat: Seat }) {
     <div className="reading">
       <p className="why-kicker">על מה זה</p>
       <p className="about">{seat.about}</p>
-      {seat.proseNote && <p className="prose">{seat.proseNote}</p>}
+      {seat.tags.length > 0 && (
+        <ul className="chips">
+          {seat.tags.map((tag) => (
+            <li key={tag}>{tag}</li>
+          ))}
+        </ul>
+      )}
     </div>
+  )
+}
+
+function ViaNote({ note }: { note: string | null }) {
+  if (!note) return null
+  return (
+    <p className="via">
+      <span className="via-kicker">מסימניה</span>
+      {note}
+    </p>
   )
 }
 
@@ -375,6 +391,7 @@ function Results({
                 ))}
               </ul>
             </div>
+            <ViaNote note={seat.viaNote} />
             <BookFacts book={seat.book} part="blurb" />
             <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
             <p className="jab">{reviewLine('נגד', seat.book.dissent.reviewer, seat.book.dissent.rating, seat.dissentLead)}</p>
@@ -476,6 +493,7 @@ function Chosen({ seat, onBack, onRestart }: { seat: Seat | null; onBack: () => 
           ))}
         </ul>
       </div>
+      <ViaNote note={seat.viaNote} />
       <BookFacts book={seat.book} part="blurb" />
       <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
       <p className="jab">{reviewLine('נגד', seat.book.dissent.reviewer, seat.book.dissent.rating, seat.dissentLead)}</p>

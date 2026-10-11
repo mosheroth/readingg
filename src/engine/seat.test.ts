@@ -61,7 +61,7 @@ describe('seatThree', () => {
       arguedBooks.filter((book) => book.origin === 'translated' && !first.some((seat) => seat.book.id === book.id)).map((book) => book.id),
     )
     const hasLink = first.some((seat) => seat.book.advocates.some((person) => person.also.some((item) => poolIds.has(item.id))))
-    if (hasLink) expect(next.some((seat) => seat.reasons.some((reason) => reason.includes('המליץ גם')))).toBe(true)
+    if (hasLink) expect(next.some((seat) => seat.viaNote?.includes('מהשלושה הקודמים'))).toBe(true)
   })
 
   it('keeps a stored reading for every disputed book', () => {
@@ -70,6 +70,28 @@ describe('seatThree', () => {
       expect(reading?.about.length).toBeGreaterThan(12)
       expect(reading?.worlds.length).toBeGreaterThan(0)
     }
+  })
+
+  it('names the earlier book when a Simania reader links the next three', () => {
+    const seats = seatThree(
+      {
+        seedId: null,
+        direction: 'different',
+        seek: 'feel',
+        heaviness: 'lasting',
+        moment: 'regular',
+        life: 'family',
+        sofa: 'quiet',
+        origin: 'translated',
+      },
+      ['1013486', '1014959', '1026524'],
+    )
+    const guest = seats.find((seat) => seat.book.title === 'האורחת האחרונה')
+    expect(guest?.viaNote).toContain('lealand')
+    expect(guest?.viaNote).toContain('שומרי הזמן')
+    expect(guest?.viaNote).toContain('מהשלושה הקודמים')
+    expect(guest?.reasons.some((reason) => reason.includes('שומרי'))).toBe(false)
+    expect(guest?.tags[0]).toContain('כתיבה')
   })
 
   it('explains the three books by subject and prose, not by length', () => {

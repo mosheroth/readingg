@@ -20,6 +20,14 @@ export interface Seat {
   dissentLead: string
   about: string
   proseNote: string
+  tags: string[]
+  viaNote: string | null
+}
+
+interface ViaLink {
+  title: string
+  reviewer: string
+  where: 'earlier' | 'here'
 }
 
 function shelfOf(book: DisputedBook): string {
@@ -56,20 +64,25 @@ function tasteScore(book: DisputedBook, answers: SeatAnswers): number {
   return score
 }
 
-function linkedFrom(bookId: string, anchors: DisputedBook[]): string[] {
-  const titles: string[] = []
-  for (const anchor of anchors) {
-    if (anchor.id === bookId) continue
-    const linked = anchor.advocates.some((person) => person.also.some((item) => item.id === bookId))
-    if (linked && !titles.includes(anchor.title)) titles.push(anchor.title)
+function linkedFrom(bookId: string, shown: DisputedBook[], chosen: DisputedBook[]): ViaLink[] {
+  const links: ViaLink[] = []
+  const scan = (anchors: DisputedBook[], where: ViaLink['where']) => {
+    for (const anchor of anchors) {
+      if (anchor.id === bookId || links.some((link) => link.title === anchor.title)) continue
+      const person = anchor.advocates.find((advocate) => advocate.also.some((item) => item.id === bookId))
+      if (!person) continue
+      links.push({ title: anchor.title, reviewer: person.reviewer, where })
+    }
   }
-  return titles
+  scan(shown, 'earlier')
+  scan(chosen, 'here')
+  return links
 }
 
-function viaLine(book: DisputedBook, via: string[]): string | null {
-  if (via.length === 1) return `מי שהמליץ על «${via[0]}» המליץ גם על «${book.title}»`
-  if (via.length > 1) return `מי שהמליץ על «${via[0]}» ועל «${via[1]}» המליץ גם על «${book.title}»`
-  return null
+function viaNote(link: ViaLink | undefined): string | null {
+  if (!link) return null
+  const place = link.where === 'earlier' ? 'מהשלושה הקודמים' : 'שיושב כאן על השולחן'
+  return `${link.reviewer} המליץ לחיוב על «${link.title}», ${place}, וגם על הספר הזה.`
 }
 
 const pullLine: Record<Seek, string> = {
@@ -103,14 +116,10 @@ function closeLine(book: DisputedBook, books: DisputedBook[], answers: SeatAnswe
   return `הכי קרוב ל«${seed.title}» מבין השלושה`
 }
 
-function reasonsForTrio(picks: { book: DisputedBook; via: string[] }[], answers: SeatAnswers): string[][] {
+function reasonsForTrio(picks: { book: DisputedBook }[], answers: SeatAnswers): string[][] {
   const books = picks.map((pick) => pick.book)
   const readings = books.map((book) => readingOf(book.id))
   const lines = books.map(() => [] as string[])
-  picks.forEach((pick, index) => {
-    const via = viaLine(pick.book, pick.via)
-    if (via) lines[index].push(via)
-  })
   readings.forEach((mine, index) => {
     if (!mine || lines[index].length >= 2) return
     const unique = mine.worlds.find(
@@ -179,15 +188,13 @@ export function seatThree(answers: SeatAnswers, exclude: string[] = []): Seat[] 
   const source = pool.length >= 3 ? pool : arguedBooks.filter((book) => !banned.has(book.id))
   const shown = arguedBooks.filter((book) => exclude.includes(book.id))
   const chosen: DisputedBook[] = []
-  const picks: { book: DisputedBook; via: string[] }[] = []
+  const picks: { book: DisputedBook; via: ViaLink | null }[] = []
 
   for (let index = 0; index < 3; index += 1) {
-    const extra = exclude.length > 0 || index > 0
-    const anchors = extra ? [...shown, ...chosen] : []
     const ranked = source
       .filter((book) => !chosen.some((pick) => pick.id === book.id))
       .map((book) => {
-        const via = linkedFrom(book.id, anchors)
+        const via = linkedFrom(book.id, shown, chosen)
         const sameShelf = answers.direction !== 'similar' && chosen.some((pick) => shelfOf(pick) === shelfOf(book))
         return {
           book,
@@ -199,7 +206,7 @@ export function seatThree(answers: SeatAnswers, exclude: string[] = []): Seat[] 
     const winner = ranked[0]
     if (!winner) break
     chosen.push(winner.book)
-    picks.push({ book: winner.book, via: winner.via.slice(0, 2) })
+    picks.push({ book: winner.book, via: winner.via[0] ?? null })
   }
   const reasons = reasonsForTrio(picks, answers)
   return picks.map((pick, index) => {
@@ -211,6 +218,8 @@ export function seatThree(answers: SeatAnswers, exclude: string[] = []): Seat[] 
       dissentLead: firstSentence(descriptionLead(pick.book.dissent.excerpt).lead),
       about: reading?.about ?? firstSentence(descriptionLead(pick.book.description).lead),
       proseNote: reading ? `הכתיבה ${proseLabel[reading.prose]}. נוגע ב${worldsPhrase(reading.worlds)}.` : '',
+      tags: reading ? [`כתיבה ${proseLabel[reading.prose]}`, ...reading.worlds.map((world) => worldLabel[world])] : [],
+      viaNote: viaNote(pick.via ?? undefined),
     }
   })
 }
