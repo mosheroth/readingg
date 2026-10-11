@@ -309,8 +309,18 @@ function Debate() {
     <section className="debate" aria-live="polite">
       <p className="kicker">רגע</p>
       <h1>שלושה ספרים עולים.</h1>
-      <p className="lede">לפי מה שסיפרתם, ולפי קוראים שכבר המליצו על ספר קרוב.</p>
+      <p className="lede">לפי מה שסיפרתם, ולפי על מה כל ספר עוסק.</p>
     </section>
+  )
+}
+
+function ReadingNote({ seat }: { seat: Seat }) {
+  return (
+    <div className="reading">
+      <p className="why-kicker">על מה זה</p>
+      <p className="about">{seat.about}</p>
+      {seat.proseNote && <p className="prose">{seat.proseNote}</p>}
+    </div>
   )
 }
 
@@ -356,6 +366,7 @@ function Results({
                 <BookFacts book={seat.book} part="facts" />
               </div>
             </div>
+            <ReadingNote seat={seat} />
             <div className="why">
               <p className="why-kicker">למה זה מתאים</p>
               <ul>
@@ -373,7 +384,9 @@ function Results({
           </article>
         ))}
       </div>
-      <p className="fine">הציטוטים מסימניה, המשפט הראשון. הביקורת המלאה נפתחת שם. הספר עצמו לא יושב כאן.</p>
+      <p className="fine">
+        על מה הספר וכבדות הכתיבה נקראו פעם אחת מהתקציר ומשתי הביקורות בסימניה, ונשמרו. הציטוטים הם המשפט הראשון. הספר עצמו לא יושב כאן.
+      </p>
       <div className="row center">
         {canReroll && (
           <button className="ghost" type="button" onClick={onReroll}>
@@ -454,6 +467,7 @@ function Chosen({ seat, onBack, onRestart }: { seat: Seat | null; onBack: () => 
           <BookFacts book={seat.book} part="facts" />
         </div>
       </div>
+      <ReadingNote seat={seat} />
       <div className="why">
         <p className="why-kicker">למה זה מתאים</p>
         <ul>

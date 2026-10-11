@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readingOf } from '../data/readings'
 import { arguedBooks, catalogSeeds } from './table'
 import { firstSentence, seatThree, type SeatAnswers } from './seat'
 
@@ -61,6 +62,32 @@ describe('seatThree', () => {
     )
     const hasLink = first.some((seat) => seat.book.advocates.some((person) => person.also.some((item) => poolIds.has(item.id))))
     if (hasLink) expect(next.some((seat) => seat.reasons.some((reason) => reason.includes('המליץ גם')))).toBe(true)
+  })
+
+  it('keeps a stored reading for every disputed book', () => {
+    for (const book of arguedBooks) {
+      const reading = readingOf(book.id)
+      expect(reading?.about.length).toBeGreaterThan(12)
+      expect(reading?.worlds.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('explains the three books by subject and prose, not by length', () => {
+    const seats = seatThree({
+      seedId: null,
+      direction: 'similar',
+      seek: 'grip',
+      heaviness: 'light',
+      moment: 'returning',
+      life: 'love',
+      sofa: 'devour',
+      origin: 'original',
+    })
+    const lines = seats.flatMap((seat) => seat.reasons)
+    expect(lines.some((line) => line.includes('עמוד'))).toBe(false)
+    expect(seats.every((seat) => seat.about.length > 12 && seat.proseNote.includes('הכתיבה'))).toBe(true)
+    expect(lines.some((line) => line.includes('כתיבה') || line.includes('נוגע') || line.includes('עולם'))).toBe(true)
+    expect(new Set(lines).size).toBe(lines.length)
   })
 
   it('shortens a review to its first sentence', () => {

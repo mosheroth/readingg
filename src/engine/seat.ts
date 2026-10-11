@@ -1,5 +1,6 @@
-import { arguedBooks, contextScore, descriptionLead, poolFor, seedById, type Direction, type DisputedBook, type OriginChoice } from './table'
+import { proseLabel, readingOf, worldLabel, worldsPhrase, type BookReading } from '../data/readings'
 import type { Heaviness, Life, Moment, Seek, Sofa } from '../types'
+import { arguedBooks, contextScore, descriptionLead, poolFor, seedById, type Direction, type DisputedBook, type OriginChoice } from './table'
 
 export interface SeatAnswers {
   seedId: string | null
@@ -17,56 +18,41 @@ export interface Seat {
   reasons: string[]
   praiseLead: string
   dissentLead: string
+  about: string
+  proseNote: string
 }
 
 function shelfOf(book: DisputedBook): string {
   return book.subcategory || book.category
 }
 
-function tasteScore(book: DisputedBook, answers: SeatAnswers): number {
-  const shelf = shelfOf(book)
-  const pages = book.pages ?? 320
-  const thriller = shelf.includes('מתח')
-  const speculative = shelf.includes('מדע') || shelf.includes('פנטז')
-  const literary = shelf.includes('ספרות')
-  const light = shelf.includes('קלה') || shelf.includes('רומן')
-  const ideas = (book.category !== '' && book.category !== 'ספרות') || shelf.includes('פסיכולוג')
-  const lifeStory = shelf.includes('חיים') || shelf.includes('ביוגר')
-  let score = 0
+const wantedProse: Record<Heaviness, BookReading['prose']> = {
+  light: 1,
+  breathing: 2,
+  lasting: 3,
+  deep: 4,
+}
 
-  if (answers.seek === 'grip' || answers.sofa === 'devour' || answers.sofa === 'mystery') {
-    if (thriller) score += 8
-    if (speculative) score += 3
-    if (pages > 480) score -= 2
+function tasteScore(book: DisputedBook, answers: SeatAnswers): number {
+  const reading = readingOf(book.id)
+  if (!reading) return 0
+  const want = wantedProse[answers.heaviness]
+  const distance = Math.abs(reading.prose - want)
+  let score = (3 - distance) * 8
+  if (answers.moment === 'returning' || answers.moment === 'afterHeavy') {
+    if (reading.prose <= 2) score += 10
+    else if (reading.prose === 4) score -= 12
   }
-  if (answers.seek === 'feel' || answers.life === 'love' || answers.life === 'family' || answers.life === 'loneliness') {
-    if (literary || lifeStory) score += 6
-    if (thriller) score -= 2
-  }
-  if (answers.seek === 'lift' || answers.heaviness === 'light' || answers.moment === 'afterHeavy') {
-    if (light) score += 6
-    if (pages <= 280) score += 3
-    if (pages > 450) score -= 3
-  }
-  if (answers.seek === 'learn' || answers.life === 'ideas' || answers.sofa === 'underline') {
-    if (ideas) score += 8
-  }
-  if (answers.seek === 'weird') {
-    if (speculative) score += 8
-    if (literary) score += 1
-  }
-  if (answers.heaviness === 'deep' || answers.heaviness === 'lasting' || answers.moment === 'challenge') {
-    if (literary) score += 4
-    if (pages >= 320) score += 2
-    if (light) score -= 3
-  }
-  if (answers.life === 'work' && ideas) score += 3
-  if (answers.life === 'society' && (ideas || literary)) score += 3
-  if (answers.moment === 'returning') {
-    if (pages < 360) score += 3
-    if (thriller || light) score += 2
-  }
-  if (answers.sofa === 'quiet' && literary) score += 3
+  if (answers.moment === 'challenge' && reading.prose >= 3) score += 10
+  if (answers.moment === 'challenge' && reading.prose === 1) score -= 6
+  if (reading.worlds.some((world) => world === answers.life)) score += 18
+  if (reading.pull === answers.seek) score += 16
+  if (answers.seek === 'grip' && reading.worlds.includes('suspense')) score += 8
+  if (answers.seek === 'weird' && reading.worlds.includes('strange')) score += 8
+  if (answers.sofa === 'devour' && reading.prose <= 2) score += 6
+  if (answers.sofa === 'quiet' && (reading.pull === 'feel' || reading.prose === 2)) score += 6
+  if (answers.sofa === 'mystery' && reading.worlds.includes('suspense')) score += 12
+  if (answers.sofa === 'underline' && (reading.prose >= 3 || reading.pull === 'learn')) score += 8
   return score
 }
 
@@ -80,102 +66,31 @@ function linkedFrom(bookId: string, anchors: DisputedBook[]): string[] {
   return titles
 }
 
-function askPhrase(answers: SeatAnswers): string {
-  if (answers.seek === 'grip') return 'ביקשתם שיתפוס'
-  if (answers.seek === 'feel') return 'ביקשתם שזה ייגע'
-  if (answers.seek === 'lift') return 'ביקשתם משהו קל יותר'
-  if (answers.seek === 'learn') return 'ביקשתם ללמוד משהו'
-  if (answers.seek === 'weird') return 'ביקשתם שיפתיע'
-  if (answers.heaviness === 'light' || answers.moment === 'afterHeavy') return 'ביקשתם משהו קל יותר'
-  if (answers.heaviness === 'deep' || answers.heaviness === 'lasting' || answers.moment === 'challenge') return 'ביקשתם משקל'
-  if (answers.origin === 'original') return 'ביקשתם ספרות מקור'
-  if (answers.origin === 'translated') return 'ביקשתם ספר מתורגם'
-  return 'לפי התשובות'
-}
-
-function formatRating(value: number): string {
-  const rounded = Math.round(value * 10) / 10
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
-}
-
-function alone<T>(books: DisputedBook[], value: T, read: (item: DisputedBook) => T): boolean {
-  return books.filter((item) => read(item) === value).length === 1
-}
-
 function viaLine(book: DisputedBook, via: string[]): string | null {
   if (via.length === 1) return `מי שהמליץ על «${via[0]}» המליץ גם על «${book.title}»`
   if (via.length > 1) return `מי שהמליץ על «${via[0]}» ועל «${via[1]}» המליץ גם על «${book.title}»`
   return null
 }
 
-function pageLine(book: DisputedBook, books: DisputedBook[], answers: SeatAnswers): string | null {
-  const pages = books.map((item) => item.pages).filter((item): item is number => item != null)
-  const mine = book.pages
-  if (mine == null || new Set(pages).size < 2 || !alone(books, mine, (item) => item.pages)) return null
-  const shortest = Math.min(...pages)
-  const longest = Math.max(...pages)
-  const wantsLight = answers.seek === 'lift' || answers.heaviness === 'light' || answers.moment === 'afterHeavy'
-  const wantsWeight = answers.heaviness === 'deep' || answers.heaviness === 'lasting' || answers.moment === 'challenge'
-  const ask = askPhrase(answers)
-  if (mine === shortest && answers.moment === 'returning') return `חוזרים אחרי הפסקה, וזה הקצר מבין השלושה: ${mine} עמודים`
-  if (mine === shortest && wantsLight && ask !== 'ביקשתם משהו קל יותר') {
-    return `ביקשתם משהו קל יותר, וזה הקצר מבין השלושה: ${mine} עמודים`
-  }
-  if (mine === longest && wantsWeight && !wantsLight && ask !== 'ביקשתם משקל') {
-    return `ביקשתם משקל, וזה הארוך מבין השלושה: ${mine} עמודים`
-  }
-  if (mine === shortest) return `זה הקצר מבין השלושה: ${mine} עמודים`
-  if (mine === longest) return `זה הארוך מבין השלושה: ${mine} עמודים`
-  return `באורך ${mine} עמודים, בין השניים האחרים`
+const pullLine: Record<Seek, string> = {
+  grip: 'ביקשתם שיתפוס, וזה נבנה כך',
+  feel: 'ביקשתם שזה ייגע, והעולם כאן רגשי',
+  lift: 'ביקשתם שירים, ויש כאן חום',
+  learn: 'ביקשתם ללמוד משהו, וזה ספר שמסביר',
+  weird: 'ביקשתם שיפתיע, והעולם כאן לא שגרתי',
 }
 
-function shelfLine(book: DisputedBook, books: DisputedBook[]): string | null {
-  const shelf = shelfOf(book).replace(/\s+/g, ' ').trim()
-  if (!shelf || !alone(books, shelfOf(book), shelfOf)) return null
-  return `זה היחיד כאן ממדף ${shelf}`
+function proseFit(reading: BookReading, answers: SeatAnswers): string {
+  const here = proseLabel[reading.prose]
+  const asked = proseLabel[wantedProse[answers.heaviness]]
+  return here === asked ? `ביקשתם כתיבה ${asked}, וזו בדיוק הכתיבה כאן` : `ביקשתם כתיבה ${asked}, וכאן היא ${here}`
 }
 
-function matchesAsk(book: DisputedBook, answers: SeatAnswers): boolean {
-  const shelf = shelfOf(book)
-  const pages = book.pages ?? 320
-  const literary = shelf.includes('ספרות')
-  const light = shelf.includes('קלה') || shelf.includes('רומן')
-  const ideas = (book.category !== '' && book.category !== 'ספרות') || shelf.includes('פסיכולוג')
-  const ask = askPhrase(answers)
-  if (ask === 'ביקשתם שיתפוס') return shelf.includes('מתח')
-  if (ask === 'ביקשתם שזה ייגע') return literary || shelf.includes('חיים') || shelf.includes('ביוגר')
-  if (ask === 'ביקשתם משהו קל יותר') return light || pages <= 280
-  if (ask === 'ביקשתם ללמוד משהו') return ideas
-  if (ask === 'ביקשתם שיפתיע') return shelf.includes('מדע') || shelf.includes('פנטז')
-  if (ask === 'ביקשתם משקל') return literary && !light
-  if (ask === 'ביקשתם ספרות מקור') return book.origin === 'original'
-  if (ask === 'ביקשתם ספר מתורגם') return book.origin === 'translated'
-  return false
-}
-
-function gapLine(book: DisputedBook, books: DisputedBook[]): string | null {
-  const gapLabel = `${book.praise.rating} מול ${book.dissent.rating}`
-  if (!alone(books, gapLabel, (item) => `${item.praise.rating} מול ${item.dissent.rating}`)) return null
-  const gap = book.praise.rating - book.dissent.rating
-  const gaps = books.map((item) => item.praise.rating - item.dissent.rating)
-  return gap === Math.max(...gaps) ? `הוויכוח כאן החד מבין השלושה: ${gapLabel}` : `הביקורות כאן ${gapLabel}`
-}
-
-function ratingLine(book: DisputedBook, books: DisputedBook[]): string | null {
-  if (book.avgRating == null || !alone(books, book.avgRating, (item) => item.avgRating)) return null
-  const ratings = books.map((item) => item.avgRating).filter((item): item is number => item != null)
-  const shown = formatRating(book.avgRating)
-  return book.avgRating === Math.max(...ratings) ? `הציון הגבוה מבין השלושה בסימניה: ${shown}` : `בסימניה הציון שלו ${shown}`
-}
-
-function yearLine(book: DisputedBook, books: DisputedBook[]): string | null {
-  if (!book.year || !alone(books, book.year, (item) => item.year)) return null
-  return `היחיד שיצא ב־${book.year}`
-}
-
-function translatorLine(book: DisputedBook, books: DisputedBook[]): string | null {
-  if (!book.translator || !alone(books, book.translator, (item) => item.translator)) return null
-  return `בתרגום ${book.translator}`
+function giveToEmptiest(lines: string[][], candidates: number[], text: string) {
+  const open = candidates.filter((index) => lines[index].length < 2)
+  if (open.length === 0) return
+  const index = [...open].sort((a, b) => lines[a].length - lines[b].length || a - b)[0]
+  if (!lines[index].includes(text)) lines[index].push(text)
 }
 
 function closeLine(book: DisputedBook, books: DisputedBook[], answers: SeatAnswers): string | null {
@@ -188,63 +103,59 @@ function closeLine(book: DisputedBook, books: DisputedBook[], answers: SeatAnswe
   return `הכי קרוב ל«${seed.title}» מבין השלושה`
 }
 
-function contrastLines(book: DisputedBook, books: DisputedBook[], answers: SeatAnswers): string[] {
-  return [
-    closeLine(book, books, answers),
-    pageLine(book, books, answers),
-    shelfLine(book, books),
-    gapLine(book, books),
-    ratingLine(book, books),
-    translatorLine(book, books),
-    yearLine(book, books),
-  ].filter((line): line is string => line != null)
-}
-
-function readerArgument(text: string): boolean {
-  return text.startsWith('ביקשתם') || text.startsWith('חוזרים')
-}
-
 function reasonsForTrio(picks: { book: DisputedBook; via: string[] }[], answers: SeatAnswers): string[][] {
   const books = picks.map((pick) => pick.book)
-  const ask = askPhrase(answers)
-  const packs = picks.map((pick) => ({
-    via: viaLine(pick.book, pick.via),
-    contrasts: contrastLines(pick.book, books, answers),
-  }))
-  const askIndex = packs.findIndex((pack, index) => matchesAsk(books[index], answers) && !readerArgument(pack.contrasts[0] ?? ''))
-  const drafts = packs.map((pack, index) => {
-    const contrasts = [...pack.contrasts]
-    const lines: string[] = []
-    if (index === askIndex) {
-      const shelf = contrasts.find((line) => line.startsWith('זה היחיד כאן ממדף'))
-      const detail = shelf ?? contrasts.find((line) => !readerArgument(line))
-      if (detail) {
-        const at = contrasts.indexOf(detail)
-        contrasts.splice(at, 1)
-        lines.push(`${ask}. ${detail}`)
-      } else lines.push(ask)
-    }
-    if (pack.via) lines.push(pack.via)
-    for (const line of contrasts) {
-      if (lines.length >= 3) break
-      if (!lines.includes(line)) lines.push(line)
-    }
-    if (lines.length === 0) {
-      const book = books[index]
-      lines.push(`של ${book.author}, ${book.praise.rating} מול ${book.dissent.rating}`)
-    }
-    return lines.slice(0, 3)
+  const readings = books.map((book) => readingOf(book.id))
+  const lines = books.map(() => [] as string[])
+  picks.forEach((pick, index) => {
+    const via = viaLine(pick.book, pick.via)
+    if (via) lines[index].push(via)
+  })
+  readings.forEach((mine, index) => {
+    if (!mine || lines[index].length >= 2) return
+    const unique = mine.worlds.find(
+      (world) => world !== answers.life && readings.every((reading, other) => other === index || !reading?.worlds.includes(world)),
+    )
+    if (unique) lines[index].push(`מבין השלושה, רק כאן זה נוגע ב${worldLabel[unique]}`)
+  })
+  const lifeHits = readings.flatMap((reading, index) => (reading?.worlds.some((world) => world === answers.life) ? [index] : []))
+  if (lifeHits.length > 0) giveToEmptiest(lines, lifeHits, `נוגע ב${worldLabel[answers.life]}, וזה מה שתופס אתכם עכשיו`)
+  const want = wantedProse[answers.heaviness]
+  const distance = (index: number) => {
+    const reading = readings[index]
+    return reading ? Math.abs(reading.prose - want) : 99
+  }
+  const best = Math.min(...books.map((_, index) => distance(index)))
+  const closest = books.flatMap((_, index) => (distance(index) === best ? [index] : []))
+  if (closest.length === 1 && best <= 1 && readings[closest[0]]) {
+    giveToEmptiest(lines, closest, proseFit(readings[closest[0]]!, answers))
+  }
+  const pullHits = readings.flatMap((reading, index) => (reading?.pull === answers.seek ? [index] : []))
+  if (pullHits.length > 0) giveToEmptiest(lines, pullHits, pullLine[answers.seek])
+  books.forEach((book, index) => {
+    if (lines[index].length > 0) return
+    const close = closeLine(book, books, answers)
+    if (close) lines[index].push(close)
+  })
+  if (closest.length > 1 && best <= 1) {
+    const empty = closest.filter((index) => lines[index].length === 0 && readings[index])
+    if (empty.length === 1) lines[empty[0]].push(proseFit(readings[empty[0]]!, answers))
+  }
+  books.forEach((_, index) => {
+    if (lines[index].length > 0) return
+    const reading = readings[index]
+    lines[index].push(reading ? `נוגע ב${worldLabel[reading.worlds[0]]}` : `של ${books[index].author}`)
   })
   const seen = new Set<string>()
-  return drafts.map((list, index) => {
+  return lines.map((list, index) => {
     const unique = list.filter((line) => {
       if (seen.has(line)) return false
       seen.add(line)
       return true
-    })
+    }).slice(0, 2)
     if (unique.length > 0) return unique
-    const book = books[index]
-    return [`של ${book.author}, ${book.praise.rating} מול ${book.dissent.rating}`]
+    const reading = readings[index]
+    return [reading ? reading.about : `של ${books[index].author}`]
   })
 }
 
@@ -291,12 +202,17 @@ export function seatThree(answers: SeatAnswers, exclude: string[] = []): Seat[] 
     picks.push({ book: winner.book, via: winner.via.slice(0, 2) })
   }
   const reasons = reasonsForTrio(picks, answers)
-  return picks.map((pick, index) => ({
-    book: pick.book,
-    reasons: reasons[index] ?? [],
-    praiseLead: firstSentence(descriptionLead(pick.book.praise.excerpt).lead),
-    dissentLead: firstSentence(descriptionLead(pick.book.dissent.excerpt).lead),
-  }))
+  return picks.map((pick, index) => {
+    const reading = readingOf(pick.book.id)
+    return {
+      book: pick.book,
+      reasons: reasons[index] ?? [],
+      praiseLead: firstSentence(descriptionLead(pick.book.praise.excerpt).lead),
+      dissentLead: firstSentence(descriptionLead(pick.book.dissent.excerpt).lead),
+      about: reading?.about ?? firstSentence(descriptionLead(pick.book.description).lead),
+      proseNote: reading ? `הכתיבה ${proseLabel[reading.prose]}. נוגע ב${worldsPhrase(reading.worlds)}.` : '',
+    }
+  })
 }
 
 const directionText: Record<Direction, string> = {
