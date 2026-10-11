@@ -3,8 +3,8 @@ import Catalog from './Catalog'
 import { questions } from './data/questions'
 import { booksSharingTheme } from './data/readings'
 import { describeSeat, seatForBook, seatSummary, seatThree, themeReason, type Seat, type SeatAnswers } from './engine/seat'
-import { arguedBooks, bookByTableId, type OriginChoice } from './engine/table'
-import { readingClock } from './reading-time'
+import { bookStats, type StatId } from './book-stats'
+import { arguedBooks, bookByTableId, type DisputedBook, type OriginChoice } from './engine/table'
 import { decodeResult, syncResultUrl } from './share'
 import { BookFacts, BookScore, BookStep, Cover, DirectionStep } from './Show'
 import { loadSession, loadShelf, saveSeat, saveSession, type SeatDraft, type Session, type ShelfItem } from './storage'
@@ -355,22 +355,68 @@ function Fit({ fit }: { fit: number }) {
   )
 }
 
-function ReadingClock({ pages }: { pages: number | null }) {
-  const clock = readingClock(pages)
-  if (!clock) return null
+function Byline({ book }: { book: DisputedBook }) {
   return (
-    <p className="clock">
-      <svg viewBox="0 0 32 32" aria-hidden="true">
-        <path d="M16 5.5a10.5 10.5 0 1 1-8.2 3.9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M6.6 6.2v4.2h4.2" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="16" cy="16.5" r="6" fill="none" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M16 13.6V16.5l2.3 1.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-      <span>
-        <span className="clock-label">זמן קריאה משוער</span>
-        <span className="clock-time">{clock} שעות</span>
-      </span>
+    <p className="byline">
+      <span className="author">{book.author}</span>
+      {book.translator ? <span className="byline-tr">תרגום: {book.translator}</span> : null}
     </p>
+  )
+}
+
+function StatIcon({ id }: { id: StatId }) {
+  if (id === 'time') {
+    return (
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M16 10.2V16l3.4 2.2" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (id === 'pages') {
+    return (
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M10 6.5h9.2L24 11.2V25.5H10z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+        <path d="M19.2 6.5V11.2H24M13.4 16.2h7M13.4 20.2h7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (id === 'year') {
+    return (
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="6.5" y="8" width="19" height="16.5" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M6.5 13.2h19M11.2 6.2v4M20.8 6.2v4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (id === 'genre') {
+    return (
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M8 8.2h7.4L24 16.8 16.8 24 8 15.2z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+        <circle cx="12.2" cy="12.4" r="1.15" fill="currentColor" />
+      </svg>
+    )
+  }
+  return (
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M6.5 14.2 16 7l9.5 7.2V25a1.4 1.4 0 0 1-1.4 1.4h-5.4v-6.1h-5.4v6.1H7.9A1.4 1.4 0 0 1 6.5 25z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function StatRow({ book }: { book: DisputedBook }) {
+  const stats = bookStats(book)
+  if (stats.length === 0) return null
+  return (
+    <ul className="stats">
+      {stats.map((stat) => (
+        <li key={stat.id}>
+          <StatIcon id={stat.id} />
+          <span className="stat-label">{stat.label}</span>
+          <span className="stat-value">{stat.value}</span>
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -491,10 +537,9 @@ function Results({
             <Cover src={seat.book.coverUrl} />
             <div className="card-body">
               <h2>{seat.book.title}</h2>
+              <Byline book={seat.book} />
               <Fit fit={seat.fit} />
               <BookScore book={seat.book} />
-              <BookFacts book={seat.book} part="facts" />
-              <ReadingClock pages={seat.book.pages} />
               <ReadingNote
                 seat={seat}
                 openTheme={open?.bookId === seat.book.id ? open.theme : null}
@@ -503,6 +548,7 @@ function Results({
                 }
                 onPickTheme={onPickTheme}
               />
+              <StatRow book={seat.book} />
               <div className="why">
                 <p className="why-kicker">למה זה מתאים</p>
                 <ul>
@@ -612,10 +658,9 @@ function Chosen({
         <Cover src={seat.book.coverUrl} />
         <div>
           <h1>{seat.book.title}</h1>
+          <Byline book={seat.book} />
           <Fit fit={seat.fit} />
           <BookScore book={seat.book} />
-          <BookFacts book={seat.book} part="facts" />
-          <ReadingClock pages={seat.book.pages} />
         </div>
       </div>
       <ReadingNote
@@ -624,6 +669,7 @@ function Chosen({
         onTheme={(theme) => setOpenTheme((current) => (current === theme ? null : theme))}
         onPickTheme={onPickTheme}
       />
+      <StatRow book={seat.book} />
       <div className="why">
         <p className="why-kicker">למה זה מתאים</p>
         <ul>
