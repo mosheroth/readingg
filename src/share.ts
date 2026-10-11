@@ -101,6 +101,7 @@ export function syncResultUrl(session: Session): void {
   const next = resultLocation(session, import.meta.env.BASE_URL || '/')
   const current = `${window.location.pathname}${window.location.search}`
   if (current === next) return
-  if (session.name === 'results' || session.name === 'chosen') window.history.pushState(null, '', next)
+  const bare = window.location.search === ''
+  if ((session.name === 'results' || session.name === 'chosen') && !bare) window.history.pushState(null, '', next)
   else window.history.replaceState(null, '', next)
 }

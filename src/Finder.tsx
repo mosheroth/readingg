@@ -5,7 +5,9 @@ import {
   applySuggestion,
   clearChip,
   distanceWords,
+  filterRows,
   findSuggestions,
+  selectFilter,
   setDirection,
   starterThemes,
   visibleChips,
@@ -28,7 +30,7 @@ export default function Finder({
   const current = { answers, themes }
   const suggestions = findSuggestions(query, { seed: answers.seedId !== null })
   const needle = fold(query)
-  const chips = visibleChips(current)
+  const chips = visibleChips(current).filter((chip) => chip.clear === 'book' || chip.clear === 'theme')
   const starters = themes.length === 0 && needle.length < 2 ? starterThemes() : []
   const showList = needle.length >= 2
 
@@ -99,6 +101,21 @@ export default function Finder({
         </ul>
       )}
       {showList && suggestions.length === 0 && <p className="suggest-empty">אין ספר, נושא או תחושה כאלה.</p>}
+      <div className="filter-rows">
+        {filterRows.map((row) => (
+          <div key={row.field} className="filter-row" role="group" aria-label={row.label}>
+            <p className="finder-label">{row.label}</p>
+            {row.options.map((option) => {
+              const on = answers[row.field] === option.value
+              return (
+                <button key={option.value} type="button" className={on ? 'on' : ''} aria-pressed={on} onClick={() => onChange(selectFilter(current, row.field, option.value))}>
+                  {option.label}
+                </button>
+              )
+            })}
+          </div>
+        ))}
+      </div>
       {starters.length > 0 && (
         <div className="starters">
           <p className="finder-label">אפשר לפתוח בנושא</p>
@@ -117,7 +134,7 @@ export default function Finder({
         </div>
       )}
       {chips.length > 0 && (
-        <div className="filters" aria-label="מה שעל השולחן">
+        <div className="filters" aria-label="מה שחיפשתם">
           {chips.map((chip) =>
             chip.clear === 'book' ? (
               <div key={chip.key} className="book-chip">
@@ -196,7 +213,7 @@ function SuggestionLine({ suggestion }: { suggestion: ReturnType<typeof findSugg
         <strong>
           <Hash theme={suggestion.theme} />
         </strong>
-        <small>{suggestion.count} ספרים על השולחן</small>
+        <small>{suggestion.count} ספרים כאן</small>
       </>
     )
   }

@@ -6,6 +6,7 @@ import {
   clearChip,
   findSuggestions,
   freshSearch,
+  selectFilter,
   setDirection,
   starterThemes,
   visibleChips,
@@ -83,6 +84,16 @@ describe('applySuggestion', () => {
     expect(current.answers.sofa).toBe('quiet')
     expect(visibleChips(current)).toEqual([])
     expect(visibleChips(freshSearch())).toEqual([])
+  })
+
+  it('moves a visible filter, and choosing it again returns to the open default', () => {
+    const deep = selectFilter(freshSearch(), 'heaviness', 'deep')
+    expect(deep.answers.heaviness).toBe('deep')
+    expect(selectFilter(deep, 'heaviness', 'deep').answers.heaviness).toBe('breathing')
+    expect(selectFilter(freshSearch(), 'heaviness', 'breathing').answers.heaviness).toBe('breathing')
+    const origin = selectFilter(freshSearch(), 'origin', 'original')
+    expect(origin.answers.origin).toBe('original')
+    expect(selectFilter(origin, 'origin', 'either').answers.origin).toBe('either')
   })
 
   it('does not move the table when a distance is chosen before any book', () => {

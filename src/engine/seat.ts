@@ -1,4 +1,3 @@
-import { boardDefaults } from '../board'
 import { proseLabel, readingOf, worldLabel, worldsPhrase, type BookReading } from '../data/readings'
 import type { Heaviness, Life, Moment, Seek, Sofa } from '../types'
 import { arguedBooks, bookByTableId, contextScore, descriptionLead, poolFor, seedById, type Direction, type DisputedBook, type OriginChoice } from './table'
@@ -118,7 +117,7 @@ function linkedFrom(bookId: string, shown: DisputedBook[], chosen: DisputedBook[
 
 function viaNote(link: ViaLink | undefined): string | null {
   if (!link) return null
-  const place = link.where === 'earlier' ? 'מהשלושה הקודמים' : 'שיושב כאן על השולחן'
+  const place = link.where === 'earlier' ? 'מהשלושה הקודמים' : 'שנמצא כאן בין השלושה'
   return `${link.reviewer} המליץ לחיוב על «${link.title}», ${place}, וגם על הספר הזה.`
 }
 
@@ -165,9 +164,7 @@ function reasonsForTrio(picks: { book: DisputedBook }[], answers: SeatAnswers): 
     if (unique) lines[index].push(`מבין השלושה, רק כאן זה נוגע ב${worldLabel[unique]}`)
   })
   const lifeHits = readings.flatMap((reading, index) => (reading?.worlds.some((world) => world === answers.life) ? [index] : []))
-  if (lifeHits.length > 0 && answers.life !== boardDefaults.life) {
-    giveToEmptiest(lines, lifeHits, `נוגע ב${worldLabel[answers.life]}, וזה מה שתופס אתכם עכשיו`)
-  }
+  if (lifeHits.length > 0) giveToEmptiest(lines, lifeHits, `נוגע ב${worldLabel[answers.life]}, וזה מה שתופס אתכם עכשיו`)
   const want = wantedProse[answers.heaviness]
   const distance = (index: number) => {
     const reading = readings[index]
@@ -175,17 +172,17 @@ function reasonsForTrio(picks: { book: DisputedBook }[], answers: SeatAnswers): 
   }
   const best = Math.min(...books.map((_, index) => distance(index)))
   const closest = books.flatMap((_, index) => (distance(index) === best ? [index] : []))
-  if (closest.length === 1 && best <= 1 && readings[closest[0]] && answers.heaviness !== boardDefaults.heaviness) {
+  if (closest.length === 1 && best <= 1 && readings[closest[0]]) {
     giveToEmptiest(lines, closest, proseFit(readings[closest[0]]!, answers))
   }
   const pullHits = readings.flatMap((reading, index) => (reading?.pull === answers.seek ? [index] : []))
-  if (pullHits.length > 0 && answers.seek !== boardDefaults.seek) giveToEmptiest(lines, pullHits, pullLine[answers.seek])
+  if (pullHits.length > 0) giveToEmptiest(lines, pullHits, pullLine[answers.seek])
   books.forEach((book, index) => {
     if (lines[index].length > 0) return
     const close = closeLine(book, books, answers)
     if (close) lines[index].push(close)
   })
-  if (closest.length > 1 && best <= 1 && answers.heaviness !== boardDefaults.heaviness) {
+  if (closest.length > 1 && best <= 1) {
     const empty = closest.filter((index) => lines[index].length === 0 && readings[index])
     if (empty.length === 1) lines[empty[0]].push(proseFit(readings[empty[0]]!, answers))
   }

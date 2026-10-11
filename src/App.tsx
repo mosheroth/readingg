@@ -5,7 +5,7 @@ import { booksSharingTheme } from './data/readings'
 import { describeSeat, seatForBook, seatThree, themeReason, type Seat, type SeatAnswers } from './engine/seat'
 import { arguedBooks, bookByTableId, type DisputedBook } from './engine/table'
 import Finder from './Finder'
-import { freshSearch, isTuned, type TableSearch } from './search-table'
+import { freshSearch, type TableSearch } from './search-table'
 import { decodeResult, syncResultUrl } from './share'
 import { BookFacts, BookScore, Cover } from './Show'
 import { loadSession, loadShelf, saveSeat, saveSession, type Session, type ShelfItem } from './storage'
@@ -21,12 +21,17 @@ function shelfLine(item: ShelfItem): string {
   return `${item.author} · ${item.personaName} ${verb}`
 }
 
+function openingSession(): Session {
+  const next = freshSearch()
+  return resultSession(next.answers, [], next.themes)
+}
+
 function initialSession(): Session {
-  if (typeof window === 'undefined') return { name: 'intro' }
+  if (typeof window === 'undefined') return openingSession()
   const shared = decodeResult(window.location.search)
   if (shared) return shared
   const stored = loadSession()
-  if (!stored || stored.name === 'quiz') return { name: 'intro' }
+  if (!stored || stored.name === 'intro' || stored.name === 'quiz') return openingSession()
   return stored
 }
 
@@ -54,7 +59,7 @@ export default function App() {
     function onPop() {
       setViaTheme(null)
       setPane('table')
-      setSession(decodeResult(window.location.search) ?? { name: 'intro' })
+      setSession(decodeResult(window.location.search) ?? openingSession())
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
@@ -112,13 +117,10 @@ export default function App() {
         <button
           className="mark"
           type="button"
-          onClick={() => {
-            setPane('table')
-            setSession({ name: 'intro' })
-          }}
+          onClick={startSearch}
         >
           <span className="live" aria-hidden="true" />
-          השולחן
+          הספר הבא
         </button>
         <button className="ghost nav" type="button" onClick={() => setPane('catalog')}>
           המאגר
@@ -126,19 +128,14 @@ export default function App() {
       </header>
       <main>
         {pane === 'catalog' && <Catalog />}
-        {pane === 'table' && (session.name === 'intro' || session.name === 'quiz') && (
-          <Intro
+        {pane === 'table' && session.name === 'results' && (
+          <Results
             shelf={shelf}
             canInstall={installEvent !== null}
             onInstall={() => {
               void installEvent?.prompt()
               setInstallEvent(null)
             }}
-            onStart={startSearch}
-          />
-        )}
-        {pane === 'table' && session.name === 'results' && (
-          <Results
             answers={session.answers}
             themes={session.themes ?? []}
             seats={seats}
@@ -155,10 +152,7 @@ export default function App() {
             onReroll={() =>
               setSession(resultSession(session.answers, [...session.exclude, ...seats.map((seat) => seat.book.id)], session.themes ?? []))
             }
-            onRestart={() => {
-              setViaTheme(null)
-              setSession({ name: 'intro' })
-            }}
+            onRestart={startSearch}
           />
         )}
         {pane === 'table' && session.name === 'chosen' && (
@@ -173,64 +167,11 @@ export default function App() {
               setViaTheme(null)
               setSession(resultSession(session.answers, session.exclude, session.themes ?? []))
             }}
-            onRestart={() => {
-              setViaTheme(null)
-              setSession({ name: 'intro' })
-            }}
+            onRestart={startSearch}
           />
         )}
       </main>
     </div>
-  )
-}
-
-function Intro({
-  shelf,
-  canInstall,
-  onInstall,
-  onStart,
-}: {
-  shelf: ShelfItem[]
-  canInstall: boolean
-  onInstall: () => void
-  onStart: () => void
-}) {
-  return (
-    <section className="intro">
-      <p className="kicker">אתה חייב לקרוא את זה</p>
-      <h1>שלושה ספרים, ועל כל אחד ויכוח.</h1>
-      <p className="lede">
-        כותבים ספר שקראתם, נושא, או תחושה. שלושת הספרים על השולחן זזים עם מה שמוסיפים. על כל אחד יש הסבר, וביקורת טובה וביקורת
-        רעה אמיתיות.
-      </p>
-      <p className="fine">
-        כרגע יש {arguedBooks.length} ספרים כאלה במאגר. בלי ביקורת נגדית אמיתית הספר לא נכנס. זו לא תוכנית הטלוויזיה,
-        ואין כאן זיקה לכאן.
-      </p>
-      <div className="row">
-        <button className="primary" type="button" onClick={onStart}>
-          מתחילים
-        </button>
-        {canInstall && (
-          <button className="ghost" type="button" onClick={onInstall}>
-            התקנה ב־Chrome
-          </button>
-        )}
-      </div>
-      {shelf.length > 0 && (
-        <section className="shelf" aria-label="ספרים שכבר בחרתם">
-          <h2>על המדף שלכם</h2>
-          <ul>
-            {shelf.map((item) => (
-              <li key={item.bookId}>
-                <strong>{item.title}</strong>
-                <span>{shelfLine(item)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </section>
   )
 }
 
@@ -400,22 +341,28 @@ function Results({
   answers,
   themes,
   seats,
+  shelf,
+  canInstall,
   canReroll,
   onSearch,
   onChoose,
   onPickTheme,
   onReroll,
   onRestart,
+  onInstall,
 }: {
   answers: SeatAnswers
   themes: string[]
   seats: Seat[]
+  shelf: ShelfItem[]
+  canInstall: boolean
   canReroll: boolean
   onSearch: (next: TableSearch) => void
   onChoose: (seat: Seat) => void
   onPickTheme: (bookId: string, theme: string) => void
   onReroll: () => void
   onRestart: () => void
+  onInstall: () => void
 }) {
   const [open, setOpen] = useState<{ bookId: string; theme: string } | null>(null)
   const seatedIds = seats.map((seat) => seat.book.id).join('-')
@@ -423,11 +370,10 @@ function Results({
     setOpen(null)
   }, [seatedIds])
   const shareLine = [...seats.map((seat) => seat.book.title), ...themes.map((theme) => `#${theme}`)].join(' · ')
-  const tuned = isTuned({ answers, themes })
   return (
     <section className="results">
-      <p className="kicker">שלושה ספרים על השולחן</p>
-      <h1>מחפשים, והשולחן זז.</h1>
+      <p className="kicker">שלושה ספרים, ועל כל אחד ויכוח</p>
+      <h1>מה הספר הבא?</h1>
       <Finder answers={answers} themes={themes} onChange={onSearch} />
       <p className="sr" aria-live="polite">
         {seats.map((seat) => seat.book.title).join(' · ')}
@@ -439,7 +385,7 @@ function Results({
             <div className="card-body">
               <h2>{seat.book.title}</h2>
               <Byline book={seat.book} />
-              {tuned && <Fit fit={seat.fit} />}
+              <Fit fit={seat.fit} />
               <BookScore book={seat.book} />
               <ReadingNote
                 seat={seat}
@@ -450,16 +396,14 @@ function Results({
                 onPickTheme={onPickTheme}
               />
               <StatRow book={seat.book} />
-              {tuned && (
-                <div className="why">
-                  <p className="why-kicker">למה זה מתאים</p>
-                  <ul>
-                    {seat.reasons.map((reason) => (
-                      <li key={reason}>{reason}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <div className="why">
+                <p className="why-kicker">למה זה מתאים</p>
+                <ul>
+                  {seat.reasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              </div>
               <ViaNote note={seat.viaNote} />
               <BookFacts book={seat.book} part="blurb" />
               <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
@@ -472,7 +416,7 @@ function Results({
         ))}
       </div>
       <p className="fine">
-        הערכת ההתאמה משווה את הספר לכבדות הכתיבה, למה שתופס, ולמה שמעסיק אתכם. נושא שחיפשתם מעלה את הספרים שלו לראש השולחן. זמן הקריאה משוער לפי בערך דקה לעמוד. על מה הספר, כבדות הכתיבה והתגיות נקראו פעם אחת מהתקציר ומשתי הביקורות בסימניה. לחיצה על תגית מביאה ספרים אחרים מאותו עניין. הציטוטים הם המשפט הראשון. הספר עצמו לא יושב כאן.
+        הערכת ההתאמה משווה את הספר לכבדות הכתיבה, למה שתופס, ולמה שמעסיק אתכם. נושא שחיפשתם מעלה את הספרים שלו קודם. זמן הקריאה משוער לפי בערך דקה לעמוד. על מה הספר, כבדות הכתיבה והתגיות נקראו פעם אחת מהתקציר ומשתי הביקורות בסימניה. לחיצה על תגית מביאה ספרים אחרים מאותו עניין. הציטוטים הם המשפט הראשון. הספר עצמו לא יושב כאן. כרגע יש {arguedBooks.length} ספרים כאלה. בלי ביקורת נגדית אמיתית הספר לא נכנס. זו לא תוכנית הטלוויזיה, ואין כאן זיקה לכאן.
       </p>
       <div className="row center">
         {canReroll && (
@@ -484,7 +428,25 @@ function Results({
         <button className="texty" type="button" onClick={onRestart}>
           מההתחלה
         </button>
+        {canInstall && (
+          <button className="ghost" type="button" onClick={onInstall}>
+            התקנה ב־Chrome
+          </button>
+        )}
       </div>
+      {shelf.length > 0 && (
+        <section className="shelf" aria-label="ספרים שכבר בחרתם">
+          <h2>על המדף שלכם</h2>
+          <ul>
+            {shelf.map((item) => (
+              <li key={item.bookId}>
+                <strong>{item.title}</strong>
+                <span>{shelfLine(item)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </section>
   )
 }
@@ -514,7 +476,7 @@ function ShareResult({ summary }: { summary: string }) {
     const url = window.location.href
     if (typeof navigator.share === 'function') {
       try {
-        await navigator.share({ title: 'השולחן', text: summary, url })
+        await navigator.share({ title: 'הספר הבא', text: summary, url })
         return
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') return

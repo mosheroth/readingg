@@ -169,8 +169,78 @@ export function clearChip(
   return { ...current, answers: { ...current.answers, origin: boardDefaults.origin } }
 }
 
-export function isTuned(current: TableSearch): boolean {
-  return visibleChips(current).length > 0
+export const filterRows = [
+  {
+    field: 'heaviness' as const,
+    label: 'כתיבה',
+    options: [
+      { value: 'light' as const, label: 'קלילה' },
+      { value: 'breathing' as const, label: 'עם אוויר' },
+      { value: 'lasting' as const, label: 'שנשארת' },
+      { value: 'deep' as const, label: 'תובענית' },
+    ],
+  },
+  {
+    field: 'seek' as const,
+    label: 'שיתפוס',
+    options: [
+      { value: 'grip' as const, label: 'לתפוס' },
+      { value: 'feel' as const, label: 'לגעת' },
+      { value: 'lift' as const, label: 'להרים' },
+      { value: 'learn' as const, label: 'ללמד' },
+      { value: 'weird' as const, label: 'להפתיע' },
+    ],
+  },
+  {
+    field: 'life' as const,
+    label: 'על מה',
+    options: [
+      { value: 'love' as const, label: 'אהבה' },
+      { value: 'family' as const, label: 'משפחה' },
+      { value: 'work' as const, label: 'עבודה' },
+      { value: 'society' as const, label: 'בחוץ' },
+      { value: 'loneliness' as const, label: 'לבד' },
+      { value: 'ideas' as const, label: 'סקרנות' },
+    ],
+  },
+  {
+    field: 'origin' as const,
+    label: 'שפה',
+    options: [
+      { value: 'either' as const, label: 'הכל' },
+      { value: 'original' as const, label: 'מקור' },
+      { value: 'translated' as const, label: 'תרגום' },
+    ],
+  },
+]
+
+export function selectFilter(current: TableSearch, field: (typeof filterRows)[number]['field'], value: string): TableSearch {
+  if (field === 'heaviness' && (value === 'light' || value === 'breathing' || value === 'lasting' || value === 'deep')) {
+    if (current.answers.heaviness === value) {
+      return value === boardDefaults.heaviness ? current : clearChip(current, { kind: 'heaviness' })
+    }
+    return applySuggestion(current, { kind: 'taste', field, value, label: heavinessLabel[value] })
+  }
+  if (field === 'seek' && (value === 'grip' || value === 'feel' || value === 'lift' || value === 'learn' || value === 'weird')) {
+    if (current.answers.seek === value) {
+      return value === boardDefaults.seek ? current : clearChip(current, { kind: 'seek' })
+    }
+    return applySuggestion(current, { kind: 'taste', field, value, label: seekLabel[value] })
+  }
+  if (field === 'life' && (value === 'love' || value === 'family' || value === 'work' || value === 'society' || value === 'loneliness' || value === 'ideas')) {
+    if (current.answers.life === value) {
+      return value === boardDefaults.life ? current : clearChip(current, { kind: 'life' })
+    }
+    return applySuggestion(current, { kind: 'taste', field, value, label: lifeLabel[value] })
+  }
+  if (field === 'origin' && (value === 'original' || value === 'translated' || value === 'either')) {
+    if (current.answers.origin === value) {
+      return value === boardDefaults.origin ? current : clearChip(current, { kind: 'origin' })
+    }
+    if (value === 'either') return clearChip(current, { kind: 'origin' })
+    return applySuggestion(current, { kind: 'taste', field, value, label: originLabel[value] })
+  }
+  return current
 }
 
 export function visibleChips(current: TableSearch): ActiveChip[] {

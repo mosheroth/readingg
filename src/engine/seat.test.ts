@@ -16,11 +16,6 @@ const base: SeatAnswers = {
 }
 
 describe('seatThree', () => {
-  it('does not claim a request that was never made', () => {
-    const lines = seatThree(seatFromBoard(boardDefaults)).flatMap((seat) => seat.reasons)
-    expect(lines.some((line) => line.includes('ביקשתם') || line.includes('תופס אתכם'))).toBe(false)
-  })
-
   it('lifts every book of a searched theme onto the table', () => {
     const seats = seatThree(seatFromBoard(boardDefaults), [], ['חתונה'])
     expect(seats.map((seat) => seat.book.id).sort()).toEqual(['1008917', '1014685', '1025563'])

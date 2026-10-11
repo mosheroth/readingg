@@ -15,9 +15,9 @@ export default defineConfig({
         globIgnores: ['**/catalog-data-*.js'],
       },
       manifest: {
-        name: 'השולחן',
-        short_name: 'השולחן',
-        description: 'ספר אחרון, שתי שאלות, ושלושה ספרים עם ביקורת טובה ורעה.',
+        name: 'הספר הבא',
+        short_name: 'הספר הבא',
+        description: 'חיפוש וסינון, ושלושה ספרים עם ביקורת טובה ורעה.',
         lang: 'he',
         dir: 'rtl',
         display: 'standalone',
