@@ -3,7 +3,7 @@ import { bookStats, type StatId } from './book-stats'
 import Catalog from './Catalog'
 import { booksSharingTheme } from './data/readings'
 import { describeSeat, seatForBook, seatThree, themeReason, type Seat, type SeatAnswers } from './engine/seat'
-import { arguedBooks, bookByTableId, type DisputedBook } from './engine/table'
+import { arguedBooks, bookByTableId, type DisputedBook, type Voice } from './engine/table'
 import Finder from './Finder'
 import { freshSearch, type TableSearch } from './search-table'
 import { decodeResult, syncResultUrl } from './share'
@@ -326,19 +326,39 @@ function ViaNote({ note }: { note: string | null }) {
   )
 }
 
-function reviewLine(kind: 'בעד' | 'נגד', reviewer: string, rating: number, lead: string) {
+function ReviewQuote({ kind, voice, lead }: { kind: 'בעד' | 'נגד'; voice: Voice; lead: string }) {
+  const [open, setOpen] = useState(false)
+  const full = voice.excerpt.replace(/\s+/g, ' ').trim()
+  const canOpen = full.length > lead.length
+  const text = open ? full : lead
   return (
-    <>
+    <div className={kind === 'בעד' ? 'pitch' : 'jab'}>
       <span className="who">
         <span className="thumb" aria-hidden="true">
           {kind === 'בעד' ? '👍' : '👎'}
         </span>
         <span>
-          {kind} · {reviewer} · דירוג {rating} מתוך 5
+          {kind} · {voice.reviewer} · דירוג {voice.rating} מתוך 5
         </span>
       </span>
-      <span className="quote">{lead}</span>
-    </>
+      {canOpen ? (
+        <button type="button" className={open ? 'quote open' : 'quote'} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+          {text}
+        </button>
+      ) : (
+        <span className="quote">{text}</span>
+      )}
+      {canOpen && (
+        <button type="button" className="expand" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+          {open ? 'פחות' : 'עוד'}
+        </button>
+      )}
+      {open && full.endsWith('…') && (
+        <a className="review-more" href={voice.url} target="_blank" rel="noreferrer">
+          הביקורת המלאה בסימניה
+        </a>
+      )}
+    </div>
   )
 }
 
@@ -411,8 +431,8 @@ function Results({
               </div>
               <ViaNote note={seat.viaNote} />
               <BookFacts book={seat.book} part="blurb" />
-              <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
-              <p className="jab">{reviewLine('נגד', seat.book.dissent.reviewer, seat.book.dissent.rating, seat.dissentLead)}</p>
+              <ReviewQuote kind="בעד" voice={seat.book.praise} lead={seat.praiseLead} />
+              <ReviewQuote kind="נגד" voice={seat.book.dissent} lead={seat.dissentLead} />
               <button className="primary" type="button" onClick={() => onChoose(seat)}>
                 זה הספר
               </button>
@@ -550,8 +570,8 @@ function Chosen({
       </div>
       <ViaNote note={seat.viaNote} />
       <BookFacts book={seat.book} part="blurb" />
-      <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
-      <p className="jab">{reviewLine('נגד', seat.book.dissent.reviewer, seat.book.dissent.rating, seat.dissentLead)}</p>
+      <ReviewQuote kind="בעד" voice={seat.book.praise} lead={seat.praiseLead} />
+      <ReviewQuote kind="נגד" voice={seat.book.dissent} lead={seat.dissentLead} />
       <p className="note">
         הספר לא נמצא כאן בתוך האפליקציה. קונים אותו או שואלים בספרייה, ואז קוראים. הבחירה נשמרת על המדף במכשיר הזה.
       </p>
