@@ -389,6 +389,24 @@ function Results({
   )
 }
 
+async function writeClipboard(url: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(url)
+    return true
+  } catch {
+    const area = document.createElement('textarea')
+    area.value = url
+    area.setAttribute('readonly', '')
+    area.style.position = 'fixed'
+    area.style.opacity = '0'
+    document.body.appendChild(area)
+    area.select()
+    const copied = document.execCommand('copy')
+    area.remove()
+    return copied
+  }
+}
+
 function ShareResult({ summary }: { summary: string }) {
   const [copied, setCopied] = useState(false)
 
@@ -402,13 +420,9 @@ function ShareResult({ summary }: { summary: string }) {
         if (error instanceof DOMException && error.name === 'AbortError') return
       }
     }
-    try {
-      await navigator.clipboard.writeText(url)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 2000)
-    } catch {
-      setCopied(false)
-    }
+    if (!(await writeClipboard(url))) return
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 2000)
   }
 
   return (
