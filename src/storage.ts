@@ -28,8 +28,8 @@ export interface SeatDraft {
 export type Session =
   | { name: 'intro' }
   | { name: 'quiz'; step: number; draft: SeatDraft }
-  | { name: 'results'; answers: SeatAnswers; exclude: string[] }
-  | { name: 'chosen'; answers: SeatAnswers; exclude: string[]; bookId: string; personaId: string }
+  | { name: 'results'; answers: SeatAnswers; exclude: string[]; themes?: string[] }
+  | { name: 'chosen'; answers: SeatAnswers; exclude: string[]; themes?: string[]; bookId: string; personaId: string }
 
 function isShelfItem(value: unknown): value is ShelfItem {
   if (!value || typeof value !== 'object') return false
@@ -80,6 +80,12 @@ function isSeatAnswers(value: unknown): value is SeatAnswers {
   )
 }
 
+function optionalThemes(value: object): boolean {
+  const themes = (value as { themes?: unknown }).themes
+  if (themes === undefined) return true
+  return Array.isArray(themes) && themes.every((item) => typeof item === 'string')
+}
+
 function isSession(value: unknown): value is Session {
   if (!value || typeof value !== 'object') return false
   const session = value as Session
@@ -87,11 +93,14 @@ function isSession(value: unknown): value is Session {
   if (session.name === 'quiz') {
     return session.step >= 0 && session.step <= 7 && typeof session.draft === 'object' && session.draft !== null
   }
-  if (session.name === 'results') return isSeatAnswers(session.answers) && Array.isArray(session.exclude)
+  if (session.name === 'results') {
+    return isSeatAnswers(session.answers) && Array.isArray(session.exclude) && optionalThemes(session)
+  }
   if (session.name === 'chosen') {
     return (
       isSeatAnswers(session.answers) &&
       Array.isArray(session.exclude) &&
+      optionalThemes(session) &&
       typeof session.bookId === 'string' &&
       typeof session.personaId === 'string'
     )

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { boardDefaults, seatFromBoard } from '../board'
 import { booksSharingTheme, readingOf } from '../data/readings'
 import { arguedBooks, bookByTableId, catalogSeeds } from './table'
 import { describeSeat, fitEstimate, firstSentence, seatForBook, seatThree, themeReason, type SeatAnswers } from './seat'
@@ -15,6 +16,17 @@ const base: SeatAnswers = {
 }
 
 describe('seatThree', () => {
+  it('does not claim a request that was never made', () => {
+    const lines = seatThree(seatFromBoard(boardDefaults)).flatMap((seat) => seat.reasons)
+    expect(lines.some((line) => line.includes('ביקשתם') || line.includes('תופס אתכם'))).toBe(false)
+  })
+
+  it('lifts every book of a searched theme onto the table', () => {
+    const seats = seatThree(seatFromBoard(boardDefaults), [], ['חתונה'])
+    expect(seats.map((seat) => seat.book.id).sort()).toEqual(['1008917', '1014685', '1025563'])
+    expect(seats.every((seat) => seat.reasons[0] === 'חיפשתם \u2067#חתונה\u2069')).toBe(true)
+  })
+
   it('offers three different books and says why each one fits', () => {
     const seats = seatThree(base)
     expect(seats).toHaveLength(3)

@@ -47,6 +47,17 @@ describe('result links', () => {
     expect(resultLocation({ name: 'intro' }, '/readingg/')).toBe('/readingg/')
   })
 
+  it('keeps a searched theme on the link and drops one the catalog does not have', () => {
+    const session: Session = { name: 'results', answers, exclude: [], themes: ['חתונה'] }
+    const search = encodeResult(session)
+    expect(search).toContain('theme=')
+    expect(decodeResult(search)).toEqual(session)
+    const params = new URLSearchParams(search)
+    params.set('theme', 'חתונה,אין דבר כזה,חתונה')
+    expect(decodeResult(params.toString())).toEqual(session)
+    expect(encodeResult({ name: 'results', answers, exclude: [] })).not.toContain('theme=')
+  })
+
   it('rejects a link that would show a different result', () => {
     const search = encodeResult({ name: 'results', answers, exclude: [] })
     expect(decodeResult(search.replace('direction=similar', 'direction=sideways'))).toBeNull()

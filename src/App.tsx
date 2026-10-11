@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { seatFromBoard, type Board } from './board'
 import { bookStats, type StatId } from './book-stats'
 import Catalog from './Catalog'
 import { booksSharingTheme } from './data/readings'
-import { describeSeat, seatForBook, seatSummary, seatThree, themeReason, type Seat, type SeatAnswers } from './engine/seat'
+import { describeSeat, seatForBook, seatThree, themeReason, type Seat, type SeatAnswers } from './engine/seat'
 import { arguedBooks, bookByTableId, type DisputedBook } from './engine/table'
+import Finder from './Finder'
+import { freshSearch, isTuned, type TableSearch } from './search-table'
 import { decodeResult, syncResultUrl } from './share'
 import { BookFacts, BookScore, Cover } from './Show'
 import { loadSession, loadShelf, saveSeat, saveSession, type Session, type ShelfItem } from './storage'
-import TableSet from './TableSet'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -23,14 +23,21 @@ function shelfLine(item: ShelfItem): string {
 
 function initialSession(): Session {
   if (typeof window === 'undefined') return { name: 'intro' }
-  return decodeResult(window.location.search) ?? loadSession() ?? { name: 'intro' }
+  const shared = decodeResult(window.location.search)
+  if (shared) return shared
+  const stored = loadSession()
+  if (!stored || stored.name === 'quiz') return { name: 'intro' }
+  return stored
+}
+
+function resultSession(answers: SeatAnswers, exclude: string[], themes: string[]): Session {
+  return themes.length > 0 ? { name: 'results', answers, exclude, themes } : { name: 'results', answers, exclude }
 }
 
 export default function App() {
   const [session, setSession] = useState<Session>(initialSession)
   const [pane, setPane] = useState<'table' | 'catalog'>('table')
   const [shelf, setShelf] = useState<ShelfItem[]>([])
-  const [debating, setDebating] = useState(false)
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null)
   const [viaTheme, setViaTheme] = useState<string | null>(null)
 
@@ -45,7 +52,6 @@ export default function App() {
 
   useEffect(() => {
     function onPop() {
-      setDebating(false)
       setViaTheme(null)
       setPane('table')
       setSession(decodeResult(window.location.search) ?? { name: 'intro' })
@@ -63,12 +69,9 @@ export default function App() {
     return () => window.removeEventListener('beforeinstallprompt', onPrompt)
   }, [])
 
-  function openResults(answers: SeatAnswers, exclude: string[]) {
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    setDebating(true)
+  function updateSearch(next: TableSearch) {
     setViaTheme(null)
-    setSession({ name: 'results', answers, exclude })
-    window.setTimeout(() => setDebating(false), reduce ? 0 : 1100)
+    setSession(resultSession(next.answers, [], next.themes))
   }
 
   function chooseBook(seat: Seat, theme?: string) {
@@ -79,19 +82,23 @@ export default function App() {
       name: 'chosen',
       answers: session.answers,
       exclude: session.exclude,
+      ...(session.themes && session.themes.length > 0 ? { themes: session.themes } : {}),
       bookId: seat.book.id,
       personaId: 'table',
     })
   }
 
-  function finish(board: Board) {
-    openResults(seatFromBoard(board), [])
+  function startSearch() {
+    setViaTheme(null)
+    setPane('table')
+    const next = freshSearch()
+    setSession(resultSession(next.answers, [], next.themes))
   }
 
   const seated = session.name === 'results' || session.name === 'chosen' ? session : null
   const seats = useMemo(() => {
     if (!seated) return []
-    return seatThree(seated.answers, seated.exclude)
+    return seatThree(seated.answers, seated.exclude, seated.themes ?? [])
   }, [seated])
   const chosenSeat = useMemo(() => {
     if (session.name !== 'chosen') return null
@@ -119,7 +126,7 @@ export default function App() {
       </header>
       <main>
         {pane === 'catalog' && <Catalog />}
-        {pane === 'table' && session.name === 'intro' && (
+        {pane === 'table' && (session.name === 'intro' || session.name === 'quiz') && (
           <Intro
             shelf={shelf}
             canInstall={installEvent !== null}
@@ -127,33 +134,30 @@ export default function App() {
               void installEvent?.prompt()
               setInstallEvent(null)
             }}
-            onStart={() => setSession({ name: 'quiz', step: 0, draft: { seedId: null } })}
+            onStart={startSearch}
           />
         )}
-        {pane === 'table' && session.name === 'quiz' && (
-          <TableSet
-            draft={session.draft}
-            onDraft={(draft) => setSession({ name: 'quiz', step: 0, draft })}
-            onBack={() => setSession({ name: 'intro' })}
-            onDone={finish}
-          />
-        )}
-        {pane === 'table' && session.name === 'results' && debating && <Debate />}
-        {pane === 'table' && session.name === 'results' && !debating && (
+        {pane === 'table' && session.name === 'results' && (
           <Results
             answers={session.answers}
+            themes={session.themes ?? []}
             seats={seats}
-            canReroll={seatThree(session.answers, [...session.exclude, ...seats.map((seat) => seat.book.id)]).length === 3}
+            canReroll={
+              seatThree(session.answers, [...session.exclude, ...seats.map((seat) => seat.book.id)], session.themes ?? []).length === 3
+            }
+            onSearch={updateSearch}
             onChoose={(seat) => chooseBook(seat)}
             onPickTheme={(bookId, theme) => {
               const book = bookByTableId(bookId)
               if (!book) return
               chooseBook(describeSeat(book, session.answers, themeReason(theme)), theme)
             }}
-            onReroll={() => openResults(session.answers, [...session.exclude, ...seats.map((seat) => seat.book.id)])}
+            onReroll={() =>
+              setSession(resultSession(session.answers, [...session.exclude, ...seats.map((seat) => seat.book.id)], session.themes ?? []))
+            }
             onRestart={() => {
               setViaTheme(null)
-              setSession({ name: 'quiz', step: 0, draft: { seedId: null } })
+              setSession({ name: 'intro' })
             }}
           />
         )}
@@ -167,11 +171,11 @@ export default function App() {
             }}
             onBack={() => {
               setViaTheme(null)
-              setSession({ name: 'results', answers: session.answers, exclude: session.exclude })
+              setSession(resultSession(session.answers, session.exclude, session.themes ?? []))
             }}
             onRestart={() => {
               setViaTheme(null)
-              setSession({ name: 'quiz', step: 0, draft: { seedId: null } })
+              setSession({ name: 'intro' })
             }}
           />
         )}
@@ -196,8 +200,8 @@ function Intro({
       <p className="kicker">אתה חייב לקרוא את זה</p>
       <h1>שלושה ספרים, ועל כל אחד ויכוח.</h1>
       <p className="lede">
-        מסדרים את השולחן: מה קראתם, כמה כבדה הכתיבה, ומה תופס עכשיו. עולים שלושה ספרים, עם הסבר למה כל אחד מתאים, ועם ביקורת
-        טובה וביקורת רעה אמיתיות.
+        כותבים ספר שקראתם, נושא, או תחושה. שלושת הספרים על השולחן זזים עם מה שמוסיפים. על כל אחד יש הסבר, וביקורת טובה וביקורת
+        רעה אמיתיות.
       </p>
       <p className="fine">
         כרגע יש {arguedBooks.length} ספרים כאלה במאגר. בלי ביקורת נגדית אמיתית הספר לא נכנס. זו לא תוכנית הטלוויזיה,
@@ -226,16 +230,6 @@ function Intro({
           </ul>
         </section>
       )}
-    </section>
-  )
-}
-
-function Debate() {
-  return (
-    <section className="debate" aria-live="polite">
-      <p className="kicker">רגע</p>
-      <h1>שלושה ספרים עולים.</h1>
-      <p className="lede">לפי מה שסידרתם, ולפי על מה כל ספר עוסק.</p>
     </section>
   )
 }
@@ -404,35 +398,48 @@ function reviewLine(kind: 'בעד' | 'נגד', reviewer: string, rating: number,
 
 function Results({
   answers,
+  themes,
   seats,
   canReroll,
+  onSearch,
   onChoose,
   onPickTheme,
   onReroll,
   onRestart,
 }: {
   answers: SeatAnswers
+  themes: string[]
   seats: Seat[]
   canReroll: boolean
+  onSearch: (next: TableSearch) => void
   onChoose: (seat: Seat) => void
   onPickTheme: (bookId: string, theme: string) => void
   onReroll: () => void
   onRestart: () => void
 }) {
   const [open, setOpen] = useState<{ bookId: string; theme: string } | null>(null)
+  const seatedIds = seats.map((seat) => seat.book.id).join('-')
+  useEffect(() => {
+    setOpen(null)
+  }, [seatedIds])
+  const shareLine = [...seats.map((seat) => seat.book.title), ...themes.map((theme) => `#${theme}`)].join(' · ')
+  const tuned = isTuned({ answers, themes })
   return (
     <section className="results">
       <p className="kicker">שלושה ספרים על השולחן</p>
-      <h1>שלושה ספרים לפי מה שסיפרתם.</h1>
-      <p className="summary">{seatSummary(answers)}</p>
-      <div className="cards">
+      <h1>מחפשים, והשולחן זז.</h1>
+      <Finder answers={answers} themes={themes} onChange={onSearch} />
+      <p className="sr" aria-live="polite">
+        {seats.map((seat) => seat.book.title).join(' · ')}
+      </p>
+      <div className="cards" key={seatedIds}>
         {seats.map((seat) => (
           <article key={seat.book.id} className="card">
             <Cover src={seat.book.coverUrl} />
             <div className="card-body">
               <h2>{seat.book.title}</h2>
               <Byline book={seat.book} />
-              <Fit fit={seat.fit} />
+              {tuned && <Fit fit={seat.fit} />}
               <BookScore book={seat.book} />
               <ReadingNote
                 seat={seat}
@@ -443,14 +450,16 @@ function Results({
                 onPickTheme={onPickTheme}
               />
               <StatRow book={seat.book} />
-              <div className="why">
-                <p className="why-kicker">למה זה מתאים</p>
-                <ul>
-                  {seat.reasons.map((reason) => (
-                    <li key={reason}>{reason}</li>
-                  ))}
-                </ul>
-              </div>
+              {tuned && (
+                <div className="why">
+                  <p className="why-kicker">למה זה מתאים</p>
+                  <ul>
+                    {seat.reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <ViaNote note={seat.viaNote} />
               <BookFacts book={seat.book} part="blurb" />
               <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
@@ -463,7 +472,7 @@ function Results({
         ))}
       </div>
       <p className="fine">
-        הערכת ההתאמה היא כמה מהבקשות בשאלון הספר ממלא. זמן הקריאה משוער לפי בערך דקה לעמוד. על מה הספר, כבדות הכתיבה והתגיות נקראו פעם אחת מהתקציר ומשתי הביקורות בסימניה. לחיצה על תגית מביאה ספרים אחרים מאותו עניין. הציטוטים הם המשפט הראשון. הספר עצמו לא יושב כאן.
+        הערכת ההתאמה משווה את הספר לכבדות הכתיבה, למה שתופס, ולמה שמעסיק אתכם. נושא שחיפשתם מעלה את הספרים שלו לראש השולחן. זמן הקריאה משוער לפי בערך דקה לעמוד. על מה הספר, כבדות הכתיבה והתגיות נקראו פעם אחת מהתקציר ומשתי הביקורות בסימניה. לחיצה על תגית מביאה ספרים אחרים מאותו עניין. הציטוטים הם המשפט הראשון. הספר עצמו לא יושב כאן.
       </p>
       <div className="row center">
         {canReroll && (
@@ -471,7 +480,7 @@ function Results({
             שלושה אחרים
           </button>
         )}
-        <ShareResult summary={seatSummary(answers)} />
+        <ShareResult summary={shareLine} />
         <button className="texty" type="button" onClick={onRestart}>
           מההתחלה
         </button>
@@ -594,7 +603,7 @@ function Chosen({
           חזרה לשלושה
         </button>
         <button className="texty" type="button" onClick={onRestart}>
-          סקר חדש
+          מההתחלה
         </button>
       </div>
     </section>

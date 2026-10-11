@@ -1,3 +1,4 @@
+import { boardDefaults } from '../board'
 import { proseLabel, readingOf, worldLabel, worldsPhrase, type BookReading } from '../data/readings'
 import type { Heaviness, Life, Moment, Seek, Sofa } from '../types'
 import { arguedBooks, bookByTableId, contextScore, descriptionLead, poolFor, seedById, type Direction, type DisputedBook, type OriginChoice } from './table'
@@ -164,7 +165,9 @@ function reasonsForTrio(picks: { book: DisputedBook }[], answers: SeatAnswers): 
     if (unique) lines[index].push(`מבין השלושה, רק כאן זה נוגע ב${worldLabel[unique]}`)
   })
   const lifeHits = readings.flatMap((reading, index) => (reading?.worlds.some((world) => world === answers.life) ? [index] : []))
-  if (lifeHits.length > 0) giveToEmptiest(lines, lifeHits, `נוגע ב${worldLabel[answers.life]}, וזה מה שתופס אתכם עכשיו`)
+  if (lifeHits.length > 0 && answers.life !== boardDefaults.life) {
+    giveToEmptiest(lines, lifeHits, `נוגע ב${worldLabel[answers.life]}, וזה מה שתופס אתכם עכשיו`)
+  }
   const want = wantedProse[answers.heaviness]
   const distance = (index: number) => {
     const reading = readings[index]
@@ -172,17 +175,17 @@ function reasonsForTrio(picks: { book: DisputedBook }[], answers: SeatAnswers): 
   }
   const best = Math.min(...books.map((_, index) => distance(index)))
   const closest = books.flatMap((_, index) => (distance(index) === best ? [index] : []))
-  if (closest.length === 1 && best <= 1 && readings[closest[0]]) {
+  if (closest.length === 1 && best <= 1 && readings[closest[0]] && answers.heaviness !== boardDefaults.heaviness) {
     giveToEmptiest(lines, closest, proseFit(readings[closest[0]]!, answers))
   }
   const pullHits = readings.flatMap((reading, index) => (reading?.pull === answers.seek ? [index] : []))
-  if (pullHits.length > 0) giveToEmptiest(lines, pullHits, pullLine[answers.seek])
+  if (pullHits.length > 0 && answers.seek !== boardDefaults.seek) giveToEmptiest(lines, pullHits, pullLine[answers.seek])
   books.forEach((book, index) => {
     if (lines[index].length > 0) return
     const close = closeLine(book, books, answers)
     if (close) lines[index].push(close)
   })
-  if (closest.length > 1 && best <= 1) {
+  if (closest.length > 1 && best <= 1 && answers.heaviness !== boardDefaults.heaviness) {
     const empty = closest.filter((index) => lines[index].length === 0 && readings[index])
     if (empty.length === 1) lines[empty[0]].push(proseFit(readings[empty[0]]!, answers))
   }
@@ -216,8 +219,16 @@ export function firstSentence(text: string, max = 160): string {
 }
 
 const INDIRECT_BOOST = 36
+/** An explicit search outranks taste, context, and a Simania cross-recommendation. */
+const THEME_BOOST = 200
 
-export function seatThree(answers: SeatAnswers, exclude: string[] = []): Seat[] {
+function searchedThemes(bookId: string, themes: string[]): string[] {
+  const reading = readingOf(bookId)
+  if (!reading || themes.length === 0) return []
+  return themes.filter((theme) => reading.themes.includes(theme))
+}
+
+export function seatThree(answers: SeatAnswers, exclude: string[] = [], themes: string[] = []): Seat[] {
   const banned = new Set(exclude)
   if (answers.seedId) banned.add(answers.seedId)
   const pool = poolFor(answers.origin, banned)
@@ -232,10 +243,16 @@ export function seatThree(answers: SeatAnswers, exclude: string[] = []): Seat[] 
       .map((book) => {
         const via = linkedFrom(book.id, shown, chosen)
         const sameShelf = answers.direction !== 'similar' && chosen.some((pick) => shelfOf(pick) === shelfOf(book))
+        const themeHits = searchedThemes(book.id, themes).length
         return {
           book,
           via,
-          score: contextScore(book, answers) + tasteScore(book, answers) + via.length * INDIRECT_BOOST - (sameShelf ? 8 : 0),
+          score:
+            contextScore(book, answers) +
+            tasteScore(book, answers) +
+            via.length * INDIRECT_BOOST +
+            themeHits * THEME_BOOST -
+            (sameShelf ? 8 : 0),
         }
       })
       .sort((a, b) => b.score - a.score || a.book.id.localeCompare(b.book.id))
@@ -247,9 +264,10 @@ export function seatThree(answers: SeatAnswers, exclude: string[] = []): Seat[] 
   const reasons = reasonsForTrio(picks, answers)
   return picks.map((pick, index) => {
     const reading = readingOf(pick.book.id)
+    const searched = searchedThemes(pick.book.id, themes).map((theme) => `חיפשתם \u2067#${theme}\u2069`)
     return {
       book: pick.book,
-      reasons: reasons[index] ?? [],
+      reasons: [...searched, ...(reasons[index] ?? [])],
       praiseLead: firstSentence(descriptionLead(pick.book.praise.excerpt).lead),
       dissentLead: firstSentence(descriptionLead(pick.book.dissent.excerpt).lead),
       about: reading?.about ?? firstSentence(descriptionLead(pick.book.description).lead),
@@ -310,8 +328,10 @@ const seekText = {
 
 const originText = { original: 'מקור', translated: 'תרגום', either: 'מכל מקום' } as const
 
-export function seatSummary(answers: SeatAnswers): string {
+export function seatSummary(answers: SeatAnswers, themes: string[] = []): string {
   const seed = seedById(answers.seedId)
   const head = seed ? `אחרי «${seed.title}»` : 'בלי ספר אחרון'
-  return `${head} · ${directionText[answers.direction]} · ${seekText[answers.seek]} · ${originText[answers.origin]}`
+  const base = `${head} · ${directionText[answers.direction]} · ${seekText[answers.seek]} · ${originText[answers.origin]}`
+  if (themes.length === 0) return base
+  return `${base} · ${themes.map((theme) => `#${theme}`).join(' · ')}`
 }

@@ -448,6 +448,26 @@ export function booksSharingTheme(theme: string, exceptId?: string): string[] {
   return Object.keys(readings).filter((id) => id !== exceptId && readings[id].themes.includes(theme))
 }
 
+const themesByCount = (() => {
+  const counts = new Map<string, number>()
+  for (const reading of Object.values(readings)) {
+    for (const theme of reading.themes) counts.set(theme, (counts.get(theme) ?? 0) + 1)
+  }
+  return [...counts.entries()]
+    .map(([theme, count]) => ({ theme, count }))
+    .sort((a, b) => b.count - a.count || a.theme.localeCompare(b.theme, 'he'))
+})()
+
+const themeNames = new Set(themesByCount.map((item) => item.theme))
+
+export function themesByPopularity(): readonly { theme: string; count: number }[] {
+  return themesByCount
+}
+
+export function isKnownTheme(theme: string): boolean {
+  return themeNames.has(theme)
+}
+
 export function worldsPhrase(worlds: ReadingWorld[]): string {
   const names = worlds.map((world) => worldLabel[world])
   if (names.length <= 1) return names[0] ?? ''

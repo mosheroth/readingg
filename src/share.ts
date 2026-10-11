@@ -1,3 +1,4 @@
+import { isKnownTheme } from './data/readings'
 import type { SeatAnswers } from './engine/seat'
 import type { Session } from './storage'
 import type { Heaviness, Life, Moment, Seek, Sofa } from './types'
@@ -15,6 +16,7 @@ const origins = ['original', 'translated', 'either'] as const satisfies readonly
 
 const ID = /^\d{1,16}$/
 const SKIP_LIMIT = 24
+const THEME_LIMIT = 4
 
 function oneOf<T extends string>(value: string | null, allowed: readonly T[]): T | null {
   if (!value) return null
@@ -38,8 +40,22 @@ export function encodeResult(session: Extract<Session, { name: 'results' | 'chos
   params.set('sofa', session.answers.sofa)
   params.set('origin', session.answers.origin)
   if (session.exclude.length > 0) params.set('skip', session.exclude.join(','))
+  const themes = (session.themes ?? []).filter((theme, index, all) => isKnownTheme(theme) && all.indexOf(theme) === index).slice(0, THEME_LIMIT)
+  if (themes.length > 0) params.set('theme', themes.join(','))
   if (session.name === 'chosen') params.set('pick', session.bookId)
   return params.toString()
+}
+
+function themesFrom(raw: string | null): string[] {
+  if (!raw) return []
+  const themes: string[] = []
+  for (const part of raw.split(',')) {
+    const theme = part.trim()
+    if (!theme || themes.includes(theme) || !isKnownTheme(theme)) continue
+    themes.push(theme)
+    if (themes.length === THEME_LIMIT) break
+  }
+  return themes
 }
 
 export function decodeResult(search: string): Session | null {
@@ -63,11 +79,14 @@ export function decodeResult(search: string): Session | null {
   if (exclude.length > SKIP_LIMIT || exclude.some((item) => !ID.test(item))) return null
 
   const answers: SeatAnswers = { seedId, direction, seek, heaviness, moment, life, sofa, origin }
+  const themes = themesFrom(params.get('theme'))
   const pickRaw = params.get('pick')
-  if (!pickRaw) return { name: 'results', answers, exclude }
+  if (!pickRaw) return themes.length > 0 ? { name: 'results', answers, exclude, themes } : { name: 'results', answers, exclude }
   const pick = bookId(pickRaw)
   if (!pick) return null
-  return { name: 'chosen', answers, exclude, bookId: pick, personaId: 'table' }
+  return themes.length > 0
+    ? { name: 'chosen', answers, exclude, themes, bookId: pick, personaId: 'table' }
+    : { name: 'chosen', answers, exclude, bookId: pick, personaId: 'table' }
 }
 
 export function resultLocation(session: Session, basePath: string): string {
