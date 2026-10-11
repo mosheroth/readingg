@@ -3,6 +3,7 @@ import Catalog from './Catalog'
 import { questions } from './data/questions'
 import { seatSummary, seatThree, type Seat, type SeatAnswers } from './engine/seat'
 import { arguedBooks, type OriginChoice } from './engine/table'
+import { readingClock } from './reading-time'
 import { decodeResult, syncResultUrl } from './share'
 import { BookFacts, BookScore, BookStep, Cover, DirectionStep } from './Show'
 import { loadSession, loadShelf, saveSeat, saveSession, type SeatDraft, type Session, type ShelfItem } from './storage'
@@ -323,6 +324,25 @@ function Fit({ fit }: { fit: number }) {
   )
 }
 
+function ReadingClock({ pages }: { pages: number | null }) {
+  const clock = readingClock(pages)
+  if (!clock) return null
+  return (
+    <p className="clock">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M16 5.5a10.5 10.5 0 1 1-8.2 3.9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M6.6 6.2v4.2h4.2" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="16" cy="16.5" r="6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M16 13.6V16.5l2.3 1.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+      <span>
+        <span className="clock-label">זמן קריאה משוער</span>
+        <span className="clock-time">{clock} שעות</span>
+      </span>
+    </p>
+  )
+}
+
 function ReadingNote({ seat }: { seat: Seat }) {
   return (
     <div className="reading">
@@ -389,6 +409,7 @@ function Results({
               <Fit fit={seat.fit} />
               <BookScore book={seat.book} />
               <BookFacts book={seat.book} part="facts" />
+              <ReadingClock pages={seat.book.pages} />
               <ReadingNote seat={seat} />
               <div className="why">
                 <p className="why-kicker">למה זה מתאים</p>
@@ -410,7 +431,7 @@ function Results({
         ))}
       </div>
       <p className="fine">
-        הערכת ההתאמה היא כמה מהבקשות בשאלון הספר ממלא. על מה הספר וכבדות הכתיבה נקראו פעם אחת מהתקציר ומשתי הביקורות בסימניה. הציטוטים הם המשפט הראשון. הספר עצמו לא יושב כאן.
+        הערכת ההתאמה היא כמה מהבקשות בשאלון הספר ממלא. זמן הקריאה משוער לפי בערך דקה לעמוד. על מה הספר וכבדות הכתיבה נקראו פעם אחת מהתקציר ומשתי הביקורות בסימניה. הציטוטים הם המשפט הראשון. הספר עצמו לא יושב כאן.
       </p>
       <div className="row center">
         {canReroll && (
@@ -491,6 +512,7 @@ function Chosen({ seat, onBack, onRestart }: { seat: Seat | null; onBack: () => 
           <Fit fit={seat.fit} />
           <BookScore book={seat.book} />
           <BookFacts book={seat.book} part="facts" />
+          <ReadingClock pages={seat.book.pages} />
         </div>
       </div>
       <ReadingNote seat={seat} />

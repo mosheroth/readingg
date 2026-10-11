@@ -271,6 +271,10 @@ h1 { font-size: clamp(36px, 6vw, 68px); line-height: 1.05; max-width: 14ch; }
   background: #e7dccb;
   flex: 0 0 auto;
 }
+.clock { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; }
+.clock svg { width: 32px; height: 32px; flex: none; }
+.clock-label { display: block; font-size: 13px; color: var(--muted); }
+.clock-time { display: block; font-family: var(--serif); font-size: 22px; font-weight: 700; line-height: 1.15; }
 .fit { display: flex; align-items: baseline; gap: 8px; margin: 8px 0 0; }
 .fit-num { font-family: var(--serif); font-size: 32px; font-weight: 700; line-height: 1; color: var(--yael); }
 .fit-label { font-size: 13px; color: var(--muted); }
@@ -328,6 +332,8 @@ h1 { font-size: clamp(36px, 6vw, 68px); line-height: 1.05; max-width: 14ch; }
   letter-spacing: 0.06em;
 }
 .chosen .facts, .chosen .blurb, .chosen .score, .chosen .why, .chosen .why-kicker, .chosen .about, .chosen .also-kicker, .chosen .also-name { color: var(--paper); }
+.chosen .clock-label { color: #d9cbb8; }
+.chosen .clock-time { color: var(--paper); }
 .chosen .fit-num { color: var(--gold); }
 .chosen .fit-label { color: #d9cbb8; }
 .chosen .via { background: rgba(246, 241, 231, 0.08); color: var(--paper); }
