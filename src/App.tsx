@@ -3,6 +3,7 @@ import Catalog from './Catalog'
 import { questions } from './data/questions'
 import { seatSummary, seatThree, type Seat, type SeatAnswers } from './engine/seat'
 import { arguedBooks, type OriginChoice } from './engine/table'
+import { decodeResult, syncResultUrl } from './share'
 import { BookFacts, BookScore, BookStep, Cover, DirectionStep } from './Show'
 import { loadSession, loadShelf, saveSeat, saveSession, type SeatDraft, type Session, type ShelfItem } from './storage'
 import type { Heaviness, Life, Moment, Seek, Sofa } from './types'
@@ -38,8 +39,13 @@ function withTaste(draft: SeatDraft, id: (typeof tasteIds)[number], value: strin
   return { ...draft, sofa: value as Sofa }
 }
 
+function initialSession(): Session {
+  if (typeof window === 'undefined') return { name: 'intro' }
+  return decodeResult(window.location.search) ?? loadSession() ?? { name: 'intro' }
+}
+
 export default function App() {
-  const [session, setSession] = useState<Session>(() => loadSession() ?? { name: 'intro' })
+  const [session, setSession] = useState<Session>(initialSession)
   const [pane, setPane] = useState<'table' | 'catalog'>('table')
   const [shelf, setShelf] = useState<ShelfItem[]>([])
   const [debating, setDebating] = useState(false)
@@ -51,7 +57,18 @@ export default function App() {
 
   useEffect(() => {
     saveSession(session)
+    syncResultUrl(session)
   }, [session])
+
+  useEffect(() => {
+    function onPop() {
+      setDebating(false)
+      setPane('table')
+      setSession(decodeResult(window.location.search) ?? { name: 'intro' })
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   useEffect(() => {
     const onPrompt = (event: Event) => {
@@ -363,11 +380,41 @@ function Results({
             שלושה אחרים
           </button>
         )}
+        <ShareResult summary={seatSummary(answers)} />
         <button className="texty" type="button" onClick={onRestart}>
           מההתחלה
         </button>
       </div>
     </section>
+  )
+}
+
+function ShareResult({ summary }: { summary: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function onShare() {
+    const url = window.location.href
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: 'השולחן', text: summary, url })
+        return
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <button className="ghost" type="button" onClick={() => void onShare()}>
+      {copied ? 'הקישור הועתק' : 'שיתוף הקישור'}
+    </button>
   )
 }
 
@@ -417,6 +464,7 @@ function Chosen({ seat, onBack, onRestart }: { seat: Seat | null; onBack: () => 
         <a className="ghost" href={seat.book.dissent.url} target="_blank" rel="noreferrer">
           הביקורת הרעה
         </a>
+        <ShareResult summary={seat.book.title} />
         <button className="ghost" type="button" onClick={onBack}>
           חזרה לשלושה
         </button>
