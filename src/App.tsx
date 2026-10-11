@@ -330,9 +330,14 @@ function reviewLine(kind: 'בעד' | 'נגד', reviewer: string, rating: number,
   return (
     <>
       <span className="who">
-        {kind} · {reviewer} · דירוג {rating} מתוך 5
+        <span className="thumb" aria-hidden="true">
+          {kind === 'בעד' ? '👍' : '👎'}
+        </span>
+        <span>
+          {kind} · {reviewer} · דירוג {rating} מתוך 5
+        </span>
       </span>
-      {lead}
+      <span className="quote">{lead}</span>
     </>
   )
 }

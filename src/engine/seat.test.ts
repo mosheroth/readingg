@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { boardDefaults, seatFromBoard } from '../board'
 import { booksSharingTheme, readingOf } from '../data/readings'
 import { arguedBooks, bookByTableId, catalogSeeds } from './table'
-import { describeSeat, fitEstimate, firstSentence, seatForBook, seatThree, themeReason, type SeatAnswers } from './seat'
+import { REVIEW_MAX, describeSeat, fitEstimate, firstSentence, seatForBook, seatThree, themeReason, type SeatAnswers } from './seat'
 
 const base: SeatAnswers = {
   seedId: null,
@@ -30,7 +30,8 @@ describe('seatThree', () => {
     expect(seats.every((seat) => seat.reasons.length > 0 && seat.reasons.length <= 3)).toBe(true)
     const lines = seats.flatMap((seat) => seat.reasons)
     expect(new Set(lines).size).toBe(lines.length)
-    expect(seats.every((seat) => seat.praiseLead.length > 20 && seat.dissentLead.length > 10)).toBe(true)
+    expect(seats.every((seat) => seat.praiseLead.length > 20 && seat.praiseLead.length <= REVIEW_MAX)).toBe(true)
+    expect(seats.every((seat) => seat.dissentLead.length > 10 && seat.dissentLead.length <= REVIEW_MAX)).toBe(true)
     expect(seatThree(base).map((seat) => seat.book.id)).toEqual(seats.map((seat) => seat.book.id))
   })
 
@@ -172,9 +173,13 @@ describe('seatThree', () => {
     expect(new Set(lines).size).toBe(lines.length)
   })
 
-  it('shortens a review to its first sentence', () => {
+  it('shortens a review to its first sentence, and keeps a long one inside the budget', () => {
     expect(firstSentence('זה משפט ראשון שהוא באמת מספיק ארוך כדי לעמוד לבד. וזה השני.')).toBe(
       'זה משפט ראשון שהוא באמת מספיק ארוך כדי לעמוד לבד.',
     )
+    const long = `על הפנים. ${'מילה '.repeat(40)}`
+    const cut = firstSentence(long, REVIEW_MAX)
+    expect(cut.endsWith('…')).toBe(true)
+    expect(cut.length).toBeLessThanOrEqual(REVIEW_MAX)
   })
 })

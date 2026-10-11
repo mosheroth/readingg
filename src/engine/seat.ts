@@ -204,13 +204,16 @@ function reasonsForTrio(picks: { book: DisputedBook }[], answers: SeatAnswers): 
   })
 }
 
+/** A review quote stays inside two lines. The ellipsis is part of the budget. */
+export const REVIEW_MAX = 80
+
 export function firstSentence(text: string, max = 160): string {
   const flat = text.replace(/\s+/g, ' ').trim()
   if (!flat) return ''
   const stop = flat.search(/[.!?]/)
   const sentence = stop >= 40 ? flat.slice(0, stop + 1) : flat
   if (sentence.length <= max) return sentence
-  const cut = sentence.slice(0, max)
+  const cut = sentence.slice(0, max - 1)
   const space = cut.lastIndexOf(' ')
   return `${(space > 40 ? cut.slice(0, space) : cut).trim()}…`
 }
@@ -265,8 +268,8 @@ export function seatThree(answers: SeatAnswers, exclude: string[] = [], themes: 
     return {
       book: pick.book,
       reasons: [...searched, ...(reasons[index] ?? [])],
-      praiseLead: firstSentence(descriptionLead(pick.book.praise.excerpt).lead),
-      dissentLead: firstSentence(descriptionLead(pick.book.dissent.excerpt).lead),
+      praiseLead: firstSentence(descriptionLead(pick.book.praise.excerpt).lead, REVIEW_MAX),
+      dissentLead: firstSentence(descriptionLead(pick.book.dissent.excerpt).lead, REVIEW_MAX),
       about: reading?.about ?? firstSentence(descriptionLead(pick.book.description).lead),
       proseNote: reading ? `הכתיבה ${proseLabel[reading.prose]}. נוגע ב${worldsPhrase(reading.worlds)}.` : '',
       tags: reading?.themes ?? [],
@@ -285,8 +288,8 @@ export function describeSeat(book: DisputedBook, answers: SeatAnswers, reason: s
   return {
     book,
     reasons: [reason],
-    praiseLead: firstSentence(descriptionLead(book.praise.excerpt).lead),
-    dissentLead: firstSentence(descriptionLead(book.dissent.excerpt).lead),
+    praiseLead: firstSentence(descriptionLead(book.praise.excerpt).lead, REVIEW_MAX),
+    dissentLead: firstSentence(descriptionLead(book.dissent.excerpt).lead, REVIEW_MAX),
     about: reading?.about ?? firstSentence(descriptionLead(book.description).lead),
     proseNote: reading ? `הכתיבה ${proseLabel[reading.prose]}. נוגע ב${worldsPhrase(reading.worlds)}.` : '',
     tags: reading?.themes ?? [],
