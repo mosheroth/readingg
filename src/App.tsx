@@ -374,30 +374,28 @@ function Results({
       <div className="cards">
         {seats.map((seat) => (
           <article key={seat.book.id} className="card">
-            <div className="card-book">
-              <Cover src={seat.book.coverUrl} />
-              <div>
-                <h2>{seat.book.title}</h2>
-                <BookScore book={seat.book} />
-                <BookFacts book={seat.book} part="facts" />
+            <Cover src={seat.book.coverUrl} />
+            <div className="card-body">
+              <h2>{seat.book.title}</h2>
+              <BookScore book={seat.book} />
+              <BookFacts book={seat.book} part="facts" />
+              <ReadingNote seat={seat} />
+              <div className="why">
+                <p className="why-kicker">למה זה מתאים</p>
+                <ul>
+                  {seat.reasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
               </div>
+              <ViaNote note={seat.viaNote} />
+              <BookFacts book={seat.book} part="blurb" />
+              <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
+              <p className="jab">{reviewLine('נגד', seat.book.dissent.reviewer, seat.book.dissent.rating, seat.dissentLead)}</p>
+              <button className="primary" type="button" onClick={() => onChoose(seat)}>
+                זה הספר
+              </button>
             </div>
-            <ReadingNote seat={seat} />
-            <div className="why">
-              <p className="why-kicker">למה זה מתאים</p>
-              <ul>
-                {seat.reasons.map((reason) => (
-                  <li key={reason}>{reason}</li>
-                ))}
-              </ul>
-            </div>
-            <ViaNote note={seat.viaNote} />
-            <BookFacts book={seat.book} part="blurb" />
-            <p className="pitch">{reviewLine('בעד', seat.book.praise.reviewer, seat.book.praise.rating, seat.praiseLead)}</p>
-            <p className="jab">{reviewLine('נגד', seat.book.dissent.reviewer, seat.book.dissent.rating, seat.dissentLead)}</p>
-            <button className="primary" type="button" onClick={() => onChoose(seat)}>
-              זה הספר
-            </button>
           </article>
         ))}
       </div>
