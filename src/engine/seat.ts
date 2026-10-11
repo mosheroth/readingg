@@ -1,6 +1,6 @@
 import { proseLabel, readingOf, worldLabel, worldsPhrase, type BookReading } from '../data/readings'
 import type { Heaviness, Life, Moment, Seek, Sofa } from '../types'
-import { arguedBooks, contextScore, descriptionLead, poolFor, seedById, type Direction, type DisputedBook, type OriginChoice } from './table'
+import { arguedBooks, bookByTableId, contextScore, descriptionLead, poolFor, seedById, type Direction, type DisputedBook, type OriginChoice } from './table'
 
 export interface SeatAnswers {
   seedId: string | null
@@ -254,11 +254,44 @@ export function seatThree(answers: SeatAnswers, exclude: string[] = []): Seat[] 
       dissentLead: firstSentence(descriptionLead(pick.book.dissent.excerpt).lead),
       about: reading?.about ?? firstSentence(descriptionLead(pick.book.description).lead),
       proseNote: reading ? `הכתיבה ${proseLabel[reading.prose]}. נוגע ב${worldsPhrase(reading.worlds)}.` : '',
-      tags: reading ? [`כתיבה ${proseLabel[reading.prose]}`, ...reading.worlds.map((world) => worldLabel[world])] : [],
+      tags: reading?.themes ?? [],
       viaNote: viaNote(pick.via ?? undefined),
       fit: fitEstimate(pick.book, answers),
     }
   })
+}
+
+export function themeReason(theme: string): string {
+  return `עוד ספר עם \u2067#${theme}\u2069`
+}
+
+export function describeSeat(book: DisputedBook, answers: SeatAnswers, reason: string): Seat {
+  const reading = readingOf(book.id)
+  return {
+    book,
+    reasons: [reason],
+    praiseLead: firstSentence(descriptionLead(book.praise.excerpt).lead),
+    dissentLead: firstSentence(descriptionLead(book.dissent.excerpt).lead),
+    about: reading?.about ?? firstSentence(descriptionLead(book.description).lead),
+    proseNote: reading ? `הכתיבה ${proseLabel[reading.prose]}. נוגע ב${worldsPhrase(reading.worlds)}.` : '',
+    tags: reading?.themes ?? [],
+    viaNote: null,
+    fit: fitEstimate(book, answers),
+  }
+}
+
+/** A book from the trio keeps its own reasons. A book reached by a theme gets one line. */
+export function seatForBook(bookId: string, answers: SeatAnswers, among: Seat[], theme: string | null = null): Seat | null {
+  const seated = among.find((seat) => seat.book.id === bookId)
+  if (seated) return seated
+  const book = bookByTableId(bookId)
+  if (!book) return null
+  const reading = readingOf(book.id)
+  const fromClick = theme && reading?.themes.includes(theme) ? theme : null
+  const fromTable = reading?.themes.find((item) => among.some((seat) => seat.tags.includes(item))) ?? null
+  const picked = fromClick ?? fromTable
+  const reason = picked ? themeReason(picked) : (reading?.about ?? book.title)
+  return describeSeat(book, answers, reason)
 }
 
 const directionText: Record<Direction, string> = {

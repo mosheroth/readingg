@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { readingOf } from '../data/readings'
+import { booksSharingTheme, readingOf } from '../data/readings'
 import { arguedBooks, bookByTableId, catalogSeeds } from './table'
-import { fitEstimate, firstSentence, seatThree, type SeatAnswers } from './seat'
+import { describeSeat, fitEstimate, firstSentence, seatForBook, seatThree, themeReason, type SeatAnswers } from './seat'
 
 const base: SeatAnswers = {
   seedId: null,
@@ -69,7 +69,21 @@ describe('seatThree', () => {
       const reading = readingOf(book.id)
       expect(reading?.about.length).toBeGreaterThan(12)
       expect(reading?.worlds.length).toBeGreaterThan(0)
+      expect(reading?.themes.length).toBeGreaterThanOrEqual(2)
+      expect(reading?.themes.length).toBeLessThanOrEqual(3)
     }
+    const counts = new Map<string, number>()
+    for (const book of arguedBooks) {
+      for (const theme of readingOf(book.id)?.themes ?? []) {
+        expect(theme.includes('#')).toBe(false)
+        counts.set(theme, (counts.get(theme) ?? 0) + 1)
+      }
+    }
+    for (const [theme, count] of counts) {
+      expect(count, theme).toBeGreaterThanOrEqual(2)
+      expect(booksSharingTheme(theme)).toHaveLength(count)
+    }
+    expect(booksSharingTheme('אמהות ובנות')).toEqual(expect.arrayContaining(['1024772', '1027378']))
   })
 
   it('scores a closer questionnaire match higher, up to 100', () => {
@@ -114,7 +128,23 @@ describe('seatThree', () => {
     expect(guest?.viaNote).toContain('שומרי הזמן')
     expect(guest?.viaNote).toContain('מהשלושה הקודמים')
     expect(guest?.reasons.some((reason) => reason.includes('שומרי'))).toBe(false)
-    expect(guest?.tags[0]).toContain('כתיבה')
+    expect(guest?.tags).toEqual(['אבות ובנות', 'חתונה'])
+    const elsewhere = seatForBook('1024772', base, seats, 'אמהות ובנות')
+    expect(elsewhere?.book.title).toBe('קול השכחה')
+    expect(elsewhere?.reasons).toEqual([themeReason('אמהות ובנות')])
+    expect(elsewhere?.tags).toContain('אמהות ובנות')
+    expect(booksSharingTheme('אמהות ובנות', '1024772').length).toBeGreaterThan(0)
+  })
+
+  it('keeps the trio explanation when the chosen book is already on the table', () => {
+    const seats = seatThree(base)
+    const again = seatForBook(seats[0].book.id, base, seats, 'אמונה')
+    expect(again?.reasons).toEqual(seats[0].reasons)
+    const book = bookByTableId('1024772')
+    const picked = describeSeat(book!, base, themeReason('זיכרון'))
+    expect(picked.viaNote).toBeNull()
+    expect(picked.fit).toBeGreaterThanOrEqual(0)
+    expect(picked.fit).toBeLessThanOrEqual(100)
   })
 
   it('explains the three books by subject and prose, not by length', () => {
