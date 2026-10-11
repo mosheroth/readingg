@@ -1,5 +1,5 @@
 import type { Seat, SeatAnswers } from './engine/seat'
-import type { Direction } from './engine/table'
+import type { Direction, OriginChoice } from './engine/table'
 import type { Heaviness, Life, Moment, Seek, Sofa } from './types'
 
 const SHELF_KEY = 'shulchan-shelf'
@@ -22,6 +22,7 @@ export interface SeatDraft {
   moment?: Moment
   life?: Life
   sofa?: Sofa
+  origin?: OriginChoice
 }
 
 export type Session =

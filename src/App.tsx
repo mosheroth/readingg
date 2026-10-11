@@ -1,44 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
+import { seatFromBoard, type Board } from './board'
+import { bookStats, type StatId } from './book-stats'
 import Catalog from './Catalog'
-import { questions } from './data/questions'
 import { booksSharingTheme } from './data/readings'
 import { describeSeat, seatForBook, seatSummary, seatThree, themeReason, type Seat, type SeatAnswers } from './engine/seat'
-import { bookStats, type StatId } from './book-stats'
-import { arguedBooks, bookByTableId, type DisputedBook, type OriginChoice } from './engine/table'
+import { arguedBooks, bookByTableId, type DisputedBook } from './engine/table'
 import { decodeResult, syncResultUrl } from './share'
-import { BookFacts, BookScore, BookStep, Cover, DirectionStep } from './Show'
-import { loadSession, loadShelf, saveSeat, saveSession, type SeatDraft, type Session, type ShelfItem } from './storage'
-import type { Heaviness, Life, Moment, Seek, Sofa } from './types'
+import { BookFacts, BookScore, Cover } from './Show'
+import { loadSession, loadShelf, saveSeat, saveSession, type Session, type ShelfItem } from './storage'
+import TableSet from './TableSet'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
-const STEPS = 8
-const tasteIds = ['seek', 'heaviness', 'moment', 'life', 'sofa'] as const
-
-const originQuestion: { title: string; options: { value: OriginChoice; label: string; hint: string }[] } = {
-  title: 'איזה קול, ומאיפה הוא מגיע?',
-  options: [
-    { value: 'original', label: 'ספרות מקור', hint: 'עברית, שפה ורחוב מכאן' },
-    { value: 'translated', label: 'מתורגם', hint: 'מהעולם, העיקר הסיפור' },
-    { value: 'either', label: 'לא משנה', hint: 'שיהיה הספר הנכון' },
-  ],
-}
-
 function shelfLine(item: ShelfItem): string {
   if (item.personaId === 'table') return `${item.author} · נבחר אחרי ביקורת טובה ורעה`
   const verb = item.personaId === 'yael' ? 'שכנעה' : 'שכנע'
   return `${item.author} · ${item.personaName} ${verb}`
-}
-
-function withTaste(draft: SeatDraft, id: (typeof tasteIds)[number], value: string): SeatDraft {
-  if (id === 'seek') return { ...draft, seek: value as Seek }
-  if (id === 'heaviness') return { ...draft, heaviness: value as Heaviness }
-  if (id === 'moment') return { ...draft, moment: value as Moment }
-  if (id === 'life') return { ...draft, life: value as Life }
-  return { ...draft, sofa: value as Sofa }
 }
 
 function initialSession(): Session {
@@ -104,13 +84,8 @@ export default function App() {
     })
   }
 
-  function finish(draft: SeatDraft, origin: OriginChoice) {
-    const { seedId, direction, seek, heaviness, moment, life, sofa } = draft
-    if (!direction || !seek || !heaviness || !moment || !life || !sofa) {
-      setSession({ name: 'quiz', step: 1, draft })
-      return
-    }
-    openResults({ seedId, direction, seek, heaviness, moment, life, sofa, origin }, [])
+  function finish(board: Board) {
+    openResults(seatFromBoard(board), [])
   }
 
   const seated = session.name === 'results' || session.name === 'chosen' ? session : null
@@ -141,11 +116,6 @@ export default function App() {
         <button className="ghost nav" type="button" onClick={() => setPane('catalog')}>
           המאגר
         </button>
-        {pane === 'table' && session.name === 'quiz' && (
-          <p className="progress">
-            שאלה {session.step + 1} מתוך {STEPS}
-          </p>
-        )}
       </header>
       <main>
         {pane === 'catalog' && <Catalog />}
@@ -160,36 +130,12 @@ export default function App() {
             onStart={() => setSession({ name: 'quiz', step: 0, draft: { seedId: null } })}
           />
         )}
-        {pane === 'table' && session.name === 'quiz' && session.step === 0 && (
-          <BookStep
+        {pane === 'table' && session.name === 'quiz' && (
+          <TableSet
+            draft={session.draft}
+            onDraft={(draft) => setSession({ name: 'quiz', step: 0, draft })}
             onBack={() => setSession({ name: 'intro' })}
-            onSkip={() => setSession({ name: 'quiz', step: 1, draft: { seedId: null } })}
-            onPick={(seed) => setSession({ name: 'quiz', step: 1, draft: { seedId: seed.id } })}
-          />
-        )}
-        {pane === 'table' && session.name === 'quiz' && session.step === 1 && (
-          <DirectionStep
-            seedId={session.draft.seedId}
-            onBack={() => setSession({ name: 'quiz', step: 0, draft: session.draft })}
-            onChoose={(direction) => setSession({ name: 'quiz', step: 2, draft: { ...session.draft, direction } })}
-          />
-        )}
-        {pane === 'table' && session.name === 'quiz' && session.step >= 2 && session.step <= 6 && (
-          <TasteStep
-            step={session.step}
-            onBack={() => setSession({ name: 'quiz', step: session.step - 1, draft: session.draft })}
-            onChoose={(value) => {
-              const id = tasteIds[session.step - 2]
-              setSession({ name: 'quiz', step: session.step + 1, draft: withTaste(session.draft, id, value) })
-            }}
-          />
-        )}
-        {pane === 'table' && session.name === 'quiz' && session.step === 7 && (
-          <ChoiceStep
-            title={originQuestion.title}
-            options={originQuestion.options}
-            onBack={() => setSession({ name: 'quiz', step: 6, draft: session.draft })}
-            onChoose={(origin) => finish(session.draft, origin as OriginChoice)}
+            onDone={finish}
           />
         )}
         {pane === 'table' && session.name === 'results' && debating && <Debate />}
@@ -250,8 +196,8 @@ function Intro({
       <p className="kicker">אתה חייב לקרוא את זה</p>
       <h1>שלושה ספרים, ועל כל אחד ויכוח.</h1>
       <p className="lede">
-        אומרים מה קראתם לאחרונה ומה בא לכם עכשיו. על השולחן עולים שלושה ספרים, עם הסבר למה כל אחד מתאים, ועם ביקורת טובה
-        וביקורת רעה אמיתיות.
+        מסדרים את השולחן: מה קראתם, כמה כבדה הכתיבה, ומה תופס עכשיו. עולים שלושה ספרים, עם הסבר למה כל אחד מתאים, ועם ביקורת
+        טובה וביקורת רעה אמיתיות.
       </p>
       <p className="fine">
         כרגע יש {arguedBooks.length} ספרים כאלה במאגר. בלי ביקורת נגדית אמיתית הספר לא נכנס. זו לא תוכנית הטלוויזיה,
@@ -284,64 +230,12 @@ function Intro({
   )
 }
 
-function TasteStep({ step, onBack, onChoose }: { step: number; onBack: () => void; onChoose: (value: string) => void }) {
-  const question = questions.find((item) => item.id === tasteIds[step - 2])
-  if (!question) return null
-  return <ChoiceStep title={question.title} options={question.options} onBack={onBack} onChoose={onChoose} />
-}
-
-function ChoiceStep({
-  title,
-  options,
-  onBack,
-  onChoose,
-}: {
-  title: string
-  options: { value: string; label: string; hint: string }[]
-  onBack: () => void
-  onChoose: (value: string) => void
-}) {
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Backspace' && !(event.target instanceof HTMLInputElement)) {
-        event.preventDefault()
-        onBack()
-        return
-      }
-      const option = options[Number(event.key) - 1]
-      if (option) onChoose(option.value)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onBack, onChoose, options])
-
-  return (
-    <section className="quiz">
-      <h1>{title}</h1>
-      <div className="options">
-        {options.map((option, index) => (
-          <button key={option.value} className="option" type="button" onClick={() => onChoose(option.value)}>
-            <span className="index">{index + 1}</span>
-            <span>
-              <strong>{option.label}</strong>
-              <small>{option.hint}</small>
-            </span>
-          </button>
-        ))}
-      </div>
-      <button className="texty" type="button" onClick={onBack}>
-        חזרה
-      </button>
-    </section>
-  )
-}
-
 function Debate() {
   return (
     <section className="debate" aria-live="polite">
       <p className="kicker">רגע</p>
       <h1>שלושה ספרים עולים.</h1>
-      <p className="lede">לפי מה שסיפרתם, ולפי על מה כל ספר עוסק.</p>
+      <p className="lede">לפי מה שסידרתם, ולפי על מה כל ספר עוסק.</p>
     </section>
   )
 }

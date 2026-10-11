@@ -191,6 +191,100 @@ h1 { font-size: clamp(36px, 6vw, 68px); line-height: 1.05; max-width: 14ch; }
 .option:hover { background: white; }
 .quiz .texty { margin-top: 8px; }
 
+.board { max-width: 760px; }
+.board h1 { max-width: 14ch; }
+.board-block { margin-top: 26px; }
+.board-label {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+}
+.seed-chip, .seed-hits button {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  text-align: right;
+  background: var(--paper);
+  color: var(--ink);
+  border: 0;
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+.seed-chip small, .seed-hits small { display: block; color: var(--muted); font-size: 13px; }
+.seed-chip button {
+  background: none;
+  border: 0;
+  color: var(--yael);
+  font-weight: 700;
+  font-size: 14px;
+}
+.seed-hits { display: grid; gap: 8px; }
+.distance, .origins, .spines, .picks { display: flex; flex-wrap: wrap; gap: 8px; }
+.distance button, .origins button, .spines button, .picks button {
+  background: rgba(246, 241, 231, 0.06);
+  color: var(--paper);
+  border: 1px solid rgba(246, 241, 231, 0.16);
+  border-radius: 16px;
+}
+.distance button, .origins button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 92px;
+  padding: 12px 10px;
+  font-weight: 700;
+}
+.distance button.on, .origins button.on, .spines button.on, .picks button.on {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: transparent;
+}
+.dist, .voice-spine, .spine {
+  display: block;
+  background: #cbbba6;
+  border-radius: 3px;
+}
+.distance button.on .dist, .origins button.on .voice-spine, .spines button.on .spine { background: var(--yael); }
+.dist { height: 8px; }
+.dist-similar { width: 18px; }
+.dist-different { width: 36px; }
+.dist-surprise { width: 58px; }
+.spines { align-items: flex-end; }
+.spines button {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: auto;
+  min-width: 0;
+  min-height: 124px;
+  padding: 10px 4px 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.spine { width: 28px; box-shadow: inset -7px 0 0 rgba(0, 0, 0, 0.18); }
+.picks button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 96px;
+  padding: 12px 8px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.picks svg { width: 28px; height: 28px; }
+.voice-spine { width: 18px; height: 46px; border-radius: 2px 5px 3px 2px; box-shadow: inset -5px 0 0 rgba(0, 0, 0, 0.18); }
+.board .row { margin-top: 28px; }
+.board .search { margin-top: 0; }
+
 .debate { padding-top: 8vh; }
 .debate h1 { max-width: 12ch; }
 
