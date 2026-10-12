@@ -456,7 +456,6 @@ function Results({
           <span className="fit-label">ודאות. כמה מהטעם כבר שמור במכשיר הזה</span>
         </p>
       )}
-      <Finder answers={answers} themes={themes} onChange={onSearch} />
       <p className="sr" aria-live="polite">
         {(home.picks.length > 0 ? home.picks.map((pick) => pick.book.title) : home.starters.map((book) => book.title)).join(' · ')}
       </p>
@@ -494,27 +493,23 @@ function Results({
           })}
         </div>
       ) : (
-        <div className="cards starters" key={shownIds}>
+        <ul className="rate-list" key={shownIds}>
           {home.starters.map((book) => (
-            <article key={book.id} className="card">
+            <li key={book.id} className="rate-row">
               <Cover src={book.coverUrl} />
-              <div className="card-body">
+              <div>
                 <h2>{book.title}</h2>
                 <Byline book={book} />
-                <p className="gap">בלי סימון אין אחוז התאמה ואין אחוז ודאות.</p>
                 <MarkBar book={book} marks={marks} onMark={onMark} />
-                <button
-                  className="primary"
-                  type="button"
-                  onClick={() => onChoose(describeSeat(book, answers, book.title))}
-                >
+                <button className="texty" type="button" onClick={() => onChoose(describeSeat(book, answers, book.title))}>
                   לעמוד הספר
                 </button>
               </div>
-            </article>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
+      <Finder answers={answers} themes={themes} onChange={onSearch} />
       <p className="fine">
         אחוז ההתאמה אומר עד כמה הספר יושב על ספרים שכבר סימנתם. אחוז הוודאות אומר כמה מהטעם כבר שמור, והוא נשאר נמוך בהתחלה ולא עובר 90%. מתחת ל־20% כתוב שעדיין אוספים. ספר בלי קריאה שמורה נספר רק לפי ז׳אנר, מקור ומחבר. זמן הקריאה משוער לפי בערך דקה לעמוד. על מה הספר, כבדות הכתיבה והתגיות נקראו פעם אחת מהתקציר ומשתי הביקורות בסימניה. לחיצה על תגית מביאה ספרים אחרים מאותו עניין. הציטוטים הם המשפט הראשון. הספר עצמו לא יושב כאן. כרגע יש {arguedBooks.length} ספרים עם ויכוח שמור. בלי ביקורת נגדית אמיתית הספר לא נכנס. זו לא תוכנית הטלוויזיה, ואין כאן זיקה לכאן.
       </p>
