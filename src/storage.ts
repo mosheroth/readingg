@@ -2,8 +2,11 @@ import type { Seat, SeatAnswers } from './engine/seat'
 import type { Direction, OriginChoice } from './engine/table'
 import type { Heaviness, Life, Moment, Seek, Sofa } from './types'
 
+import type { MarkKind, TasteMark } from './engine/taste'
+
 const SHELF_KEY = 'shulchan-shelf'
 const SESSION_KEY = 'shulchan-session'
+const TASTE_KEY = 'shulchan-taste'
 
 export interface ShelfItem {
   bookId: string
@@ -121,4 +124,34 @@ export function loadSession(): Session | null {
 
 export function saveSession(session: Session): void {
   sessionStorage.setItem(SESSION_KEY, JSON.stringify(session))
+}
+
+const markKinds = new Set<MarkKind>(['loved', 'disliked', 'want', 'skip'])
+
+function isTasteMark(value: unknown): value is TasteMark {
+  if (!value || typeof value !== 'object') return false
+  const mark = value as TasteMark
+  return typeof mark.bookId === 'string' && mark.bookId.length > 0 && typeof mark.title === 'string' && markKinds.has(mark.kind)
+}
+
+export function loadTaste(): TasteMark[] {
+  try {
+    const raw = localStorage.getItem(TASTE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.filter(isTasteMark) : []
+  } catch {
+    return []
+  }
+}
+
+export function saveTaste(marks: TasteMark[]): void {
+  localStorage.setItem(TASTE_KEY, JSON.stringify(marks))
+}
+
+/** The same mark again clears it. A different mark on the same book replaces it. */
+export function toggleTaste(marks: TasteMark[], next: Omit<TasteMark, 'at'>): TasteMark[] {
+  const current = marks.find((mark) => mark.bookId === next.bookId)
+  if (current?.kind === next.kind) return marks.filter((mark) => mark.bookId !== next.bookId)
+  return [{ ...next, at: Date.now() }, ...marks.filter((mark) => mark.bookId !== next.bookId)]
 }

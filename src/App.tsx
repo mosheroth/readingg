@@ -3,12 +3,13 @@ import { bookStats, type StatId } from './book-stats'
 import Catalog from './Catalog'
 import { booksSharingTheme } from './data/readings'
 import { describeSeat, seatForBook, seatThree, themeReason, type Seat, type SeatAnswers } from './engine/seat'
+import { bookTaste, markLabel, tasteHome, type BookTaste, type MarkKind, type TasteMark } from './engine/taste'
 import { arguedBooks, bookByTableId, type DisputedBook, type Voice } from './engine/table'
 import Finder from './Finder'
 import { freshSearch, type TableSearch } from './search-table'
 import { decodeResult, syncResultUrl } from './share'
 import { BookFacts, BookScore, Cover } from './Show'
-import { loadSession, loadShelf, saveSeat, saveSession, type Session, type ShelfItem } from './storage'
+import { loadSession, loadShelf, loadTaste, saveSeat, saveSession, saveTaste, toggleTaste, type Session, type ShelfItem } from './storage'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -43,11 +44,13 @@ export default function App() {
   const [session, setSession] = useState<Session>(initialSession)
   const [pane, setPane] = useState<'table' | 'catalog'>('table')
   const [shelf, setShelf] = useState<ShelfItem[]>([])
+  const [marks, setMarks] = useState<TasteMark[]>([])
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null)
   const [viaTheme, setViaTheme] = useState<string | null>(null)
 
   useEffect(() => {
     setShelf(loadShelf())
+    setMarks(loadTaste())
   }, [])
 
   useEffect(() => {
@@ -90,6 +93,14 @@ export default function App() {
       ...(session.themes && session.themes.length > 0 ? { themes: session.themes } : {}),
       bookId: seat.book.id,
       personaId: 'table',
+    })
+  }
+
+  function onMark(book: { id: string; title: string; author: string }, kind: MarkKind) {
+    setMarks((current) => {
+      const next = toggleTaste(current, { bookId: book.id, title: book.title, author: book.author, kind })
+      saveTaste(next)
+      return next
     })
   }
 
@@ -138,26 +149,23 @@ export default function App() {
             }}
             answers={session.answers}
             themes={session.themes ?? []}
-            seats={seats}
-            canReroll={
-              seatThree(session.answers, [...session.exclude, ...seats.map((seat) => seat.book.id)], session.themes ?? []).length === 3
-            }
+            marks={marks}
             onSearch={updateSearch}
             onChoose={(seat) => chooseBook(seat)}
+            onMark={onMark}
             onPickTheme={(bookId, theme) => {
               const book = bookByTableId(bookId)
               if (!book) return
               chooseBook(describeSeat(book, session.answers, themeReason(theme)), theme)
             }}
-            onReroll={() =>
-              setSession(resultSession(session.answers, [...session.exclude, ...seats.map((seat) => seat.book.id)], session.themes ?? []))
-            }
             onRestart={startSearch}
           />
         )}
         {pane === 'table' && session.name === 'chosen' && (
           <Chosen
             seat={chosenSeat}
+            marks={marks}
+            onMark={onMark}
             onPickTheme={(bookId, theme) => {
               const book = bookByTableId(bookId)
               if (!book) return
@@ -175,12 +183,55 @@ export default function App() {
   )
 }
 
-function Fit({ fit }: { fit: number }) {
+function ForYou({ taste }: { taste: BookTaste }) {
   return (
-    <p className="fit">
-      <span className="fit-num">{fit}</span>
-      <span className="fit-label">הערכת התאמה, מתוך 100</span>
-    </p>
+    <section className="foryou" aria-label="בשבילכם">
+      <p className="why-kicker">בשבילכם</p>
+      {taste.fit === null ? (
+        <p className="gap">{taste.gap}</p>
+      ) : (
+        <>
+          <p className="fit-pair">
+            <span>
+              <b>{taste.fit}%</b> התאמה
+            </span>
+            <span>
+              <b>{taste.certainty}%</b> ודאות
+            </span>
+          </p>
+          {taste.collecting && <p className="collecting">עדיין אוספים</p>}
+          {taste.reasons.length > 0 && (
+            <ul>
+              {taste.reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          )}
+          {taste.gap && <p className="gap">{taste.gap}</p>}
+        </>
+      )}
+    </section>
+  )
+}
+
+function MarkBar({
+  book,
+  marks,
+  onMark,
+}: {
+  book: { id: string; title: string; author: string }
+  marks: TasteMark[]
+  onMark: (book: { id: string; title: string; author: string }, kind: MarkKind) => void
+}) {
+  const current = marks.find((mark) => mark.bookId === book.id)?.kind
+  return (
+    <div className="mark-bar" role="group" aria-label={`סימון של ${book.title}`}>
+      {(Object.keys(markLabel) as MarkKind[]).map((kind) => (
+        <button key={kind} className={current === kind ? 'on' : ''} type="button" aria-pressed={current === kind} onClick={() => onMark(book, kind)}>
+          {markLabel[kind]}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -365,90 +416,109 @@ function ReviewQuote({ kind, voice, lead }: { kind: 'בעד' | 'נגד'; voice: 
 function Results({
   answers,
   themes,
-  seats,
+  marks,
   shelf,
   canInstall,
-  canReroll,
   onSearch,
   onChoose,
+  onMark,
   onPickTheme,
-  onReroll,
   onRestart,
   onInstall,
 }: {
   answers: SeatAnswers
   themes: string[]
-  seats: Seat[]
+  marks: TasteMark[]
   shelf: ShelfItem[]
   canInstall: boolean
-  canReroll: boolean
   onSearch: (next: TableSearch) => void
   onChoose: (seat: Seat) => void
+  onMark: (book: { id: string; title: string; author: string }, kind: MarkKind) => void
   onPickTheme: (bookId: string, theme: string) => void
-  onReroll: () => void
   onRestart: () => void
   onInstall: () => void
 }) {
   const [open, setOpen] = useState<{ bookId: string; theme: string } | null>(null)
-  const seatedIds = seats.map((seat) => seat.book.id).join('-')
+  const home = tasteHome(marks, { origin: answers.origin, themes })
+  const shownIds = (home.picks.length > 0 ? home.picks.map((pick) => pick.book.id) : home.starters.map((book) => book.id)).join('-')
   useEffect(() => {
     setOpen(null)
-  }, [seatedIds])
-  const shareLine = [...seats.map((seat) => seat.book.title), ...themes.map((theme) => `#${theme}`)].join(' · ')
+  }, [shownIds])
+  const shareLine = [...home.picks.map((pick) => pick.book.title), ...themes.map((theme) => `#${theme}`)].join(' · ')
   return (
     <section className="results">
-      <p className="kicker">שלושה ספרים, ועל כל אחד ויכוח</p>
-      <h1>מה הספר הבא?</h1>
+      <p className="kicker">{home.collecting ? 'עדיין אוספים' : 'יש על מה להישען'}</p>
+      <h1>{marks.length === 0 ? 'מה כבר קראתם?' : 'הטעם עד עכשיו'}</h1>
+      <p className="portrait">{home.line}</p>
+      {marks.length > 0 && (
+        <p className="fit">
+          <span className="fit-num">{home.certainty}%</span>
+          <span className="fit-label">ודאות. כמה מהטעם כבר שמור במכשיר הזה</span>
+        </p>
+      )}
       <Finder answers={answers} themes={themes} onChange={onSearch} />
       <p className="sr" aria-live="polite">
-        {seats.map((seat) => seat.book.title).join(' · ')}
+        {(home.picks.length > 0 ? home.picks.map((pick) => pick.book.title) : home.starters.map((book) => book.title)).join(' · ')}
       </p>
-      <div className="cards" key={seatedIds}>
-        {seats.map((seat) => (
-          <article key={seat.book.id} className="card">
-            <Cover src={seat.book.coverUrl} />
-            <div className="card-body">
-              <h2>{seat.book.title}</h2>
-              <Byline book={seat.book} />
-              <Fit fit={seat.fit} />
-              <BookScore book={seat.book} />
-              <ReadingNote
-                seat={seat}
-                openTheme={open?.bookId === seat.book.id ? open.theme : null}
-                onTheme={(theme) =>
-                  setOpen((current) => (current?.bookId === seat.book.id && current.theme === theme ? null : { bookId: seat.book.id, theme }))
-                }
-                onPickTheme={onPickTheme}
-              />
-              <StatRow book={seat.book} />
-              <div className="why">
-                <p className="why-kicker">למה זה מתאים</p>
-                <ul>
-                  {seat.reasons.map((reason) => (
-                    <li key={reason}>{reason}</li>
-                  ))}
-                </ul>
+      {home.picks.length > 0 ? (
+        <div className="cards" key={shownIds}>
+          {home.picks.map((pick) => {
+            const seat = describeSeat(pick.book, answers, pick.taste.reasons[0] ?? pick.book.title)
+            return (
+              <article key={pick.book.id} className="card">
+                <Cover src={pick.book.coverUrl} />
+                <div className="card-body">
+                  <h2>{pick.book.title}</h2>
+                  <Byline book={pick.book} />
+                  <ForYou taste={pick.taste} />
+                  <BookScore book={pick.book} />
+                  <ReadingNote
+                    seat={seat}
+                    openTheme={open?.bookId === pick.book.id ? open.theme : null}
+                    onTheme={(theme) =>
+                      setOpen((current) => (current?.bookId === pick.book.id && current.theme === theme ? null : { bookId: pick.book.id, theme }))
+                    }
+                    onPickTheme={onPickTheme}
+                  />
+                  <StatRow book={pick.book} />
+                  <BookFacts book={pick.book} part="blurb" />
+                  <ReviewQuote kind="בעד" voice={pick.book.praise} lead={seat.praiseLead} />
+                  <ReviewQuote kind="נגד" voice={pick.book.dissent} lead={seat.dissentLead} />
+                  <MarkBar book={pick.book} marks={marks} onMark={onMark} />
+                  <button className="primary" type="button" onClick={() => onChoose(seat)}>
+                    זה הספר
+                  </button>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="cards starters" key={shownIds}>
+          {home.starters.map((book) => (
+            <article key={book.id} className="card">
+              <Cover src={book.coverUrl} />
+              <div className="card-body">
+                <h2>{book.title}</h2>
+                <Byline book={book} />
+                <p className="gap">בלי סימון אין אחוז התאמה ואין אחוז ודאות.</p>
+                <MarkBar book={book} marks={marks} onMark={onMark} />
+                <button
+                  className="primary"
+                  type="button"
+                  onClick={() => onChoose(describeSeat(book, answers, book.title))}
+                >
+                  לעמוד הספר
+                </button>
               </div>
-              <ViaNote note={seat.viaNote} />
-              <BookFacts book={seat.book} part="blurb" />
-              <ReviewQuote kind="בעד" voice={seat.book.praise} lead={seat.praiseLead} />
-              <ReviewQuote kind="נגד" voice={seat.book.dissent} lead={seat.dissentLead} />
-              <button className="primary" type="button" onClick={() => onChoose(seat)}>
-                זה הספר
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
+            </article>
+          ))}
+        </div>
+      )}
       <p className="fine">
-        הערכת ההתאמה משווה את הספר לכבדות הכתיבה, למה שתופס, ולמה שמעסיק אתכם. נושא שחיפשתם מעלה את הספרים שלו קודם. זמן הקריאה משוער לפי בערך דקה לעמוד. על מה הספר, כבדות הכתיבה והתגיות נקראו פעם אחת מהתקציר ומשתי הביקורות בסימניה. לחיצה על תגית מביאה ספרים אחרים מאותו עניין. הציטוטים הם המשפט הראשון. הספר עצמו לא יושב כאן. כרגע יש {arguedBooks.length} ספרים כאלה. בלי ביקורת נגדית אמיתית הספר לא נכנס. זו לא תוכנית הטלוויזיה, ואין כאן זיקה לכאן.
+        אחוז ההתאמה אומר עד כמה הספר יושב על ספרים שכבר סימנתם. אחוז הוודאות אומר כמה מהטעם כבר שמור, והוא נשאר נמוך בהתחלה ולא עובר 90%. מתחת ל־20% כתוב שעדיין אוספים. ספר בלי קריאה שמורה נספר רק לפי ז׳אנר, מקור ומחבר. זמן הקריאה משוער לפי בערך דקה לעמוד. על מה הספר, כבדות הכתיבה והתגיות נקראו פעם אחת מהתקציר ומשתי הביקורות בסימניה. לחיצה על תגית מביאה ספרים אחרים מאותו עניין. הציטוטים הם המשפט הראשון. הספר עצמו לא יושב כאן. כרגע יש {arguedBooks.length} ספרים עם ויכוח שמור. בלי ביקורת נגדית אמיתית הספר לא נכנס. זו לא תוכנית הטלוויזיה, ואין כאן זיקה לכאן.
       </p>
       <div className="row center">
-        {canReroll && (
-          <button className="ghost" type="button" onClick={onReroll}>
-            שלושה אחרים
-          </button>
-        )}
         <ShareResult summary={shareLine} />
         <button className="texty" type="button" onClick={onRestart}>
           מההתחלה
@@ -521,11 +591,15 @@ function ShareResult({ summary }: { summary: string }) {
 
 function Chosen({
   seat,
+  marks,
+  onMark,
   onPickTheme,
   onBack,
   onRestart,
 }: {
   seat: Seat | null
+  marks: TasteMark[]
+  onMark: (book: { id: string; title: string; author: string }, kind: MarkKind) => void
   onPickTheme: (bookId: string, theme: string) => void
   onBack: () => void
   onRestart: () => void
@@ -549,7 +623,8 @@ function Chosen({
         <div>
           <h1>{seat.book.title}</h1>
           <Byline book={seat.book} />
-          <Fit fit={seat.fit} />
+          <ForYou taste={bookTaste(seat.book, marks)} />
+          <MarkBar book={seat.book} marks={marks} onMark={onMark} />
           <BookScore book={seat.book} />
         </div>
       </div>
@@ -560,14 +635,6 @@ function Chosen({
         onPickTheme={onPickTheme}
       />
       <StatRow book={seat.book} />
-      <div className="why">
-        <p className="why-kicker">למה זה מתאים</p>
-        <ul>
-          {seat.reasons.map((reason) => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
-      </div>
       <ViaNote note={seat.viaNote} />
       <BookFacts book={seat.book} part="blurb" />
       <ReviewQuote kind="בעד" voice={seat.book.praise} lead={seat.praiseLead} />
