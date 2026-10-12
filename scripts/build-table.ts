@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readings } from '../src/data/readings'
 import { BOOK_COLUMNS, REVIEW_COLUMNS, parseCsv } from '../src/simania/csv'
 import { excerpt } from '../src/simania/parse'
 
@@ -180,6 +181,8 @@ for (const row of bookRows.slice(1)) {
   const good = praise.get(id)
   const bad = dissent.get(id)
   if (!good || !bad) continue
+  // A disputed book is only seated once someone has stored a reading of its blurb and two reviews.
+  if (!readings[id]) continue
   const pages = num(row[bookIndex.pages] ?? '')
   const coverUrl = (row[bookIndex.cover_url] ?? '').trim()
   const avgRating = rating && rating > 0 ? rating : null

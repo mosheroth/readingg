@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { bookPageUrl, excerpt, modernPublishedYear, reviewPageUrl, type BookMeta } from './parse'
 import type { CatalogBook, CatalogPage, CatalogStore, CrawlCursor, StoredReview } from './store'
@@ -666,7 +666,13 @@ function numberOrNull(value: string): number | null {
 async function atomicWrite(filePath: string, contents: string): Promise<void> {
   const temporary = `${filePath}.tmp`
   await writeFile(temporary, contents, 'utf8')
-  await rename(temporary, filePath)
+  try {
+    await rename(temporary, filePath)
+  } catch (error) {
+    if (!isReplaceDenied(error)) throw error
+    await rm(filePath, { force: true })
+    await rename(temporary, filePath)
+  }
 }
 
 async function readState(statePath: string): Promise<CrawlCursor> {
@@ -733,4 +739,8 @@ function pageFromReviews(
 
 function isMissing(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+}
+
+function isReplaceDenied(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && (error.code === 'EPERM' || error.code === 'EEXIST')
 }

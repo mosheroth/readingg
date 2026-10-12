@@ -22,7 +22,7 @@ export async function createBrowserFetch(): Promise<{
           return await deadline(readPage(page, url), 60_000)
         } catch (error) {
           const message = error instanceof Error ? error.message : ''
-          const recoverable = /timed out|Target closed|Session closed|Protocol error|Execution context was destroyed|frame was detached/i.test(message)
+          const recoverable = /timed out|Target closed|Session closed|Protocol error|Execution context was destroyed|detached frame|frame was detached/i.test(message)
           if (!recoverable) throw error
           await page.close().catch(() => undefined)
           page = await openPage(browser)
@@ -31,7 +31,7 @@ export async function createBrowserFetch(): Promise<{
       return '<title>חסר</title>'
     },
     async close() {
-      await browser.close()
+      await Promise.race([browser.close(), new Promise((resolve) => setTimeout(resolve, 15_000))])
     },
   }
 }
