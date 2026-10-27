@@ -8,6 +8,13 @@
       content="ספרים וספרי שמע לילדים ולנוער מהספרייה העירונית הוד השרון, דרך Libby."
     />
     <title>ספרים לילדים ולנוער</title>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const registration of registrations) registration.unregister()
+        })
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
