@@ -5,8 +5,8 @@ h1 { font-size: 1.45rem; margin: 0 0 4px; }
 p { margin: 8px 0; }
 .note, .muted { color: #444; }
 .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
-button, input { font: inherit; }
-button { border: 1px solid #888; background: #fff; padding: 6px 10px; cursor: pointer; }
+button, input, a.btn { font: inherit; }
+button, a.btn { border: 1px solid #888; background: #fff; color: #111; padding: 6px 10px; cursor: pointer; text-decoration: none; }
 button.on { background: #111; color: #fff; }
 form { display: flex; gap: 6px; margin: 10px 0; }
 input[type='search'] { flex: 1; min-width: 0; padding: 8px; border: 1px solid #888; }

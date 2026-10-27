@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { availability, readUrl, searchUrl, toBook, TOPICS, type Audience, type Book, type Kind } from './libby'
 
-type Reader = { book: Book; mode: 'sample' | 'read' }
+type Sample = Book
 
 export default function App() {
   const [audience, setAudience] = useState<Audience>('juvenile')
@@ -14,7 +14,7 @@ export default function App() {
   const [total, setTotal] = useState(0)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [picked, setPicked] = useState<Book | null>(null)
-  const [reader, setReader] = useState<Reader | null>(null)
+  const [sample, setSample] = useState<Sample | null>(null)
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -56,7 +56,7 @@ export default function App() {
       <header>
         <h1>ספרים לילדים ולנוער</h1>
         <p className="note">
-          מהספרייה העירונית הוד השרון, דרך Libby (הספרייה הדיגיטלית ישראל). בוחרים ספר כאן, וקוראים אותו בליבי עם מספר הקורא של הספרייה.
+          מהספרייה העירונית הוד השרון, דרך Libby (הספרייה הדיגיטלית ישראל). לקריאה נפתחת בחלון חדש של ליבי, עם מספר הקורא של הספרייה.
         </p>
       </header>
       <main>
@@ -97,8 +97,8 @@ export default function App() {
             <p className="muted">{picked.kind === 'audiobook' ? 'ספר שמע' : 'ספר'} · {availability(picked)}</p>
             {picked.description && <p>{picked.description}</p>}
             <div className="row">
-              <button type="button" onClick={() => setReader({ book: picked, mode: 'read' })}>לקריאה</button>
-              {picked.sample && <button type="button" onClick={() => setReader({ book: picked, mode: 'sample' })}>טעימה</button>}
+              <a className="btn" href={readUrl(picked.id)} target="_blank" rel="noreferrer">לקריאה</a>
+              {picked.sample && <button type="button" onClick={() => setSample(picked)}>טעימה</button>}
               <button type="button" onClick={() => setPicked(null)}>סגירה</button>
             </div>
           </section>
@@ -123,17 +123,14 @@ export default function App() {
           </p>
         )}
       </main>
-      {reader && (
+      {sample && (
         <div className="reader">
           <div className="bar">
-            <button type="button" onClick={() => setReader(null)}>חזרה למדף</button>
-            <strong>{reader.book.title}</strong>
-            <a href={readUrl(reader.book.id)} target="_blank" rel="noreferrer">פתיחה בליבי</a>
+            <button type="button" onClick={() => setSample(null)}>חזרה למדף</button>
+            <strong>{sample.title}</strong>
+            <a className="btn" href={readUrl(sample.id)} target="_blank" rel="noreferrer">לקריאה</a>
           </div>
-          <iframe
-            title={reader.mode === 'sample' ? 'טעימה' : 'קריאה בליבי'}
-            src={reader.mode === 'sample' ? reader.book.sample : readUrl(reader.book.id)}
-          />
+          <iframe title="טעימה" src={sample.sample} />
         </div>
       )}
     </>
